@@ -221,7 +221,7 @@ export function getStoredProduct(): BeautyProduct {
       if (raw) {
         try {
           const parsed = JSON.parse(raw);
-          if (parsed && typeof parsed === 'object' && parsed.title) {
+          if (parsed && typeof parsed === 'object' && parsed.title && parsed.id === ROZA_BEAUTY_PRODUCT.id) {
             return {
               ...ROZA_BEAUTY_PRODUCT,
               ...parsed,
