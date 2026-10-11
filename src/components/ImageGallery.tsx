@@ -17,7 +17,7 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
-  const [aspectMode, setAspectMode] = useState<'cover' | 'contain'>('cover');
+  const [aspectMode, setAspectMode] = useState<'cover' | 'contain'>('contain');
 
   // Reset index if images length changes
   useEffect(() => {
@@ -76,17 +76,17 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
     <div className="w-full flex flex-col gap-3 select-none">
       {/* Main Responsive Image Frame */}
       <div 
-        className="relative w-full rounded-2xl overflow-hidden bg-stone-900 border border-stone-200/60 shadow-md group transition-all duration-300"
+        className="relative w-full rounded-2xl overflow-hidden border border-stone-200/60 shadow-md group transition-all duration-300 bg-white"
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
         {/* Responsive Aspect Ratio Container tailored for mobile */}
-        <div className="relative w-full aspect-[4/3] sm:aspect-[16/10] md:aspect-[4/3] min-h-[300px] max-h-[520px] flex items-center justify-center overflow-hidden bg-stone-950">
+        <div className="relative w-full aspect-[4/5] max-h-[640px] flex items-center justify-center overflow-hidden bg-stone-100">
           
           {/* Ambient Backdrop Blur */}
           <div 
-            className="absolute inset-0 bg-cover bg-center filter blur-xl opacity-35 scale-110 pointer-events-none transition-all duration-500"
+            className="absolute inset-0 bg-cover bg-center filter blur-2xl opacity-70 scale-125 pointer-events-none transition-all duration-500"
             style={{ backgroundImage: `url(${currentImage})` }}
           />
 
@@ -95,7 +95,7 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
             src={currentImage}
             alt={`${productTitle} - صورة ${currentIndex + 1}`}
             className={`relative z-10 w-full h-full transition-all duration-500 ${
-              aspectMode === 'contain' ? 'object-contain p-2' : 'object-cover'
+              aspectMode === 'contain' ? 'object-contain' : 'object-cover'
             }`}
             loading="eager"
             onError={(e) => {
@@ -176,7 +176,7 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
             key={idx}
             type="button"
             onClick={() => setCurrentIndex(idx)}
-            className={`relative flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border-2 transition-all duration-200 bg-stone-100 cursor-pointer ${
+            className={`relative flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border-2 transition-all duration-200 bg-white cursor-pointer ${
               idx === currentIndex
                 ? 'border-rose-600 scale-102 shadow-md ring-2 ring-rose-600/30'
                 : 'border-stone-200 hover:border-stone-400 opacity-70 hover:opacity-100'
@@ -185,7 +185,7 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
             <img
               src={img}
               alt={`صورة مصغرة ${idx + 1}`}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-contain"
               loading="lazy"
             />
           </button>
