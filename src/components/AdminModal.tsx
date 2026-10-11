@@ -119,7 +119,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       setPinError('');
       setPinInput('');
     } else {
-      setPinError('كلمة السر غير صحيحة! يرجى إدخال رمز الأمان المصرح به (2009).');
+      setPinError('كلمة السر غير صحيحة!');
     }
   };
 
@@ -471,7 +471,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
               لوحة الإدارة محمية برمز الأمان
             </h3>
             <p className="text-xs text-stone-500 mb-6">
-              يرجى إدخال كلمة السر المصرح بها (2009) للوصول للوحة التحكم وتعديل محتوى المتجر
+              يرجى إدخال كلمة السر للوصول للوحة التحكم وتعديل محتوى المتجر
             </p>
 
             <form onSubmit={handlePinSubmit} className="w-full flex flex-col gap-3">
@@ -486,7 +486,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                     setPinInput(e.target.value);
                     setPinError('');
                   }}
-                  placeholder="أدخل كلمة السر 2009..."
+                  placeholder="أدخل كلمة السر..."
                   className="w-full py-3 px-4 rounded-xl border border-stone-300 text-center font-mono text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-rose-500"
                 />
               </div>
