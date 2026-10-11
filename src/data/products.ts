@@ -8,10 +8,14 @@ export const ROZA_BEAUTY_PRODUCT: BeautyProduct = {
   price: 62000,
   currency: 'د.ج',
   images: [
-    'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=1200&q=80',
-    'https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=1200&q=80',
-    'https://images.unsplash.com/photo-1527799820374-dcf8d9d4a388?auto=format&fit=crop&w=1200&q=80',
-    'https://images.unsplash.com/photo-1582095133179-bfd08e2fc6b3?auto=format&fit=crop&w=1200&q=80'
+    'https://raw.githubusercontent.com/dahmrisadik60-png/rozaketchendz/main/public/images/bissell-1.webp',
+    'https://raw.githubusercontent.com/dahmrisadik60-png/rozaketchendz/main/public/images/bissell-2.webp',
+    'https://raw.githubusercontent.com/dahmrisadik60-png/rozaketchendz/main/public/images/bissell-3.webp',
+    'https://raw.githubusercontent.com/dahmrisadik60-png/rozaketchendz/main/public/images/bissell-4.webp',
+    'https://raw.githubusercontent.com/dahmrisadik60-png/rozaketchendz/main/public/images/bissell-5.webp',
+    'https://raw.githubusercontent.com/dahmrisadik60-png/rozaketchendz/main/public/images/bissell-6.webp',
+    'https://raw.githubusercontent.com/dahmrisadik60-png/rozaketchendz/main/public/images/bissell-7.webp',
+    'https://raw.githubusercontent.com/dahmrisadik60-png/rozaketchendz/main/public/images/bissell-8.webp'
   ],
   keyPoints: [
     'تنظيف متكامل في خطوة واحدة: يجمع الـ Aspirateur بين شفط الأتربة وغسيل وتجفيف الأرضيات والسجاد في نفس الوقت لتوفير الوقت والجهد.',
