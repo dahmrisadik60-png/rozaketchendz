@@ -79,7 +79,7 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({
       <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-xs">
         <h3 className="font-extrabold text-stone-900 text-sm mb-3.5 flex items-center gap-1.5">
           <Sparkles className="w-4 h-4 text-rose-500" />
-          <span>{product.keyPointsTitle || 'أهم مميزات مصفف Roza Beauty 5 في 1:'}</span>
+          <span>{product.keyPointsTitle || 'أهم مميزات المنتج:'}</span>
         </h3>
         <ul className="flex flex-col gap-3">
           {product.keyPoints.map((point, idx) => (

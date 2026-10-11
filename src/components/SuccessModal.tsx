@@ -12,7 +12,7 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({ order, onClose }) =>
 
   const handleWhatsAppSupport = () => {
     const text = encodeURIComponent(
-      `السلام عليكم، لقد قمت بطلب مصفف الشعر Roza Beauty 5 في 1 برقم الطلب (${order.orderNumber}).\nالاسم: ${order.fullName}\nالهاتف: ${order.phone}\nالولاية: ${order.wilayaName}\nالمبلغ المطلوب: ${order.grandTotal} د.ج`
+      `السلام عليكم، لقد قمت بطلب المنتج برقم الطلب (${order.orderNumber}).\nالاسم: ${order.fullName}\nالهاتف: ${order.phone}\nالولاية: ${order.wilayaName}\nالمبلغ المطلوب: ${order.grandTotal} د.ج`
     );
     window.open(`https://wa.me/213777413872?text=${text}`, '_blank');
   };

@@ -20,7 +20,7 @@ export const Footer: React.FC<FooterProps> = ({ onOpenAdminPrompt }) => {
               <span className="text-lg font-black text-white">Roza Beauty DZ</span>
             </div>
             <p className="text-xs text-stone-400 max-w-sm leading-relaxed">
-              العلامة الجزائرية الموثوقة لأجهزة تصفيف وعناية الشعر. مصفف الشعر الأصلي 5 في 1 مع ضمان الجودة وتوصيل سريع لكافة الـ 58 ولاية.
+              العلامة الجزائرية الموثوقة للأجهزة المنزلية العصرية. أجهزة أصلية مع ضمان الجودة وتوصيل سريع لكافة الـ 58 ولاية.
             </p>
           </div>
 
@@ -63,15 +63,15 @@ export const Footer: React.FC<FooterProps> = ({ onOpenAdminPrompt }) => {
             <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
             <div>
               <div className="text-xs font-bold text-white">الدفع عند الاستلام 100%</div>
-              <div className="text-[11px] text-stone-400 mt-0.5">افحصي وتأكدي من محتوى الجهاز قبل الدفع</div>
+              <div className="text-[11px] text-stone-400 mt-0.5">افحص وتأكد من محتوى الجهاز قبل الدفع</div>
             </div>
           </div>
 
           <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-stone-800/60 border border-stone-800">
             <Sparkles className="w-5 h-5 text-pink-400 shrink-0 mt-0.5" />
             <div>
-              <div className="text-xs font-bold text-white">جهاز أصلي 5 في 1</div>
-              <div className="text-[11px] text-stone-400 mt-0.5">تقنية السيراميك والأيونات لراحة تدوم</div>
+              <div className="text-xs font-bold text-white">جهاز أصلي 100%</div>
+              <div className="text-[11px] text-stone-400 mt-0.5">ضمان الجودة مع إمكانية المعاينة عند الاستلام</div>
             </div>
           </div>
         </div>
