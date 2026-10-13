@@ -1,0 +1,93 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny all access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAuthorizedAdmin() {
+      return isSignedIn() &&
+        request.auth.token.email == 'dahmrisadik60@gmail.com';
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidOrder(data) {
+      return data.keys().hasAll([
+        'orderNumber', 'fullName', 'phone', 'wilayaCode', 'wilayaName',
+        'commune', 'deliveryType', 'deliveryFee', 'productId', 'productTitle',
+        'quantity', 'unitPrice', 'productTotal', 'grandTotal', 'status', 'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'id', 'orderNumber', 'fullName', 'phone', 'wilayaCode', 'wilayaName',
+        'commune', 'deliveryType', 'deliveryFee', 'productId', 'productTitle',
+        'quantity', 'unitPrice', 'productTotal', 'grandTotal', 'status', 'createdAt', 'notes', 'items'
+      ]) &&
+      data.orderNumber is string && data.orderNumber.size() > 0 && data.orderNumber.size() <= 64 &&
+      data.fullName is string && data.fullName.size() > 0 && data.fullName.size() <= 128 &&
+      data.phone is string && data.phone.size() > 0 && data.phone.size() <= 32 &&
+      data.wilayaCode is number &&
+      data.wilayaName is string && data.wilayaName.size() > 0 && data.wilayaName.size() <= 64 &&
+      data.commune is string && data.commune.size() > 0 && data.commune.size() <= 64 &&
+      data.deliveryType in ['home', 'desk'] &&
+      data.deliveryFee is number &&
+      data.productId is string && data.productId.size() > 0 && data.productId.size() <= 128 &&
+      data.productTitle is string && data.productTitle.size() > 0 && data.productTitle.size() <= 256 &&
+      data.quantity is number && data.quantity > 0 &&
+      data.unitPrice is number &&
+      data.productTotal is number &&
+      data.grandTotal is number &&
+      data.status in ['new', 'called', 'confirmed', 'shipped', 'delivered', 'cancelled'] &&
+      data.createdAt is string && data.createdAt.size() > 0 && data.createdAt.size() <= 64 &&
+      (!('id' in data) || (data.id is string && data.id.size() <= 128)) &&
+      (!('notes' in data) || (data.notes is string && data.notes.size() <= 500)) &&
+      (!('items' in data) || (data.items is list && data.items.size() <= 50));
+    }
+
+    // 1) Orders collection:
+    // Any visitor can create an order.
+    // Only the authorized admin can read, list, update, and delete orders.
+    match /orders/{orderId} {
+      allow create: if isValidId(orderId) &&
+                       isValidOrder(request.resource.data);
+
+      allow get, list: if isAuthorizedAdmin();
+      allow update: if isAuthorizedAdmin() &&
+                       isValidOrder(request.resource.data);
+      allow delete: if isAuthorizedAdmin();
+    }
+
+    // 2) Products collection:
+    // Public read for everyone.
+    // Write/update/delete strictly for authorized admin.
+    match /products/{productId} {
+      allow get, list: if true;
+      allow create, update, delete: if isAuthorizedAdmin();
+    }
+
+    // 3) Categories collection:
+    // Public read for everyone.
+    // Write/update/delete strictly for authorized admin.
+    match /categories/{categoryId} {
+      allow get, list: if true;
+      allow create, update, delete: if isAuthorizedAdmin();
+    }
+
+    // 4) Settings collection (product, reviews, pixels, banner):
+    // Public read for everyone.
+    // Write/update/delete strictly for authorized admin.
+    match /settings/{docId} {
+      allow get, list: if true;
+      allow create, update, delete: if isAuthorizedAdmin();
+    }
+  }
+}

@@ -122,6 +122,8 @@ export function saveOrder(order: Order): Order[] {
   }
 }
 
+export const saveStoredOrder = saveOrder;
+
 /**
  * Update order status and persist to localStorage
  */

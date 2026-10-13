@@ -19,12 +19,22 @@ export interface CustomerReview {
   verified: boolean;
 }
 
+export interface ProductCategory {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  icon?: string;
+  order?: number;
+}
+
 export interface BeautyProduct {
   id: string;
   brandName: string;
   title: string;
   tagline: string;
   price: number;
+  originalPrice?: number;
   currency: string;
   images: string[];
   keyPoints: string[];
@@ -35,6 +45,26 @@ export interface BeautyProduct {
   reviewsCount: number;
   inStock: boolean;
   guaranteeText: string;
+  categoryId?: string;
+  categorySlug?: string;
+  categoryName?: string;
+  isFeatured?: boolean;
+  isVisible?: boolean;
+  stockCount?: number;
+  description?: string;
+}
+
+export interface CartItem {
+  product: BeautyProduct;
+  quantity: number;
+}
+
+export interface OrderItem {
+  productId: string;
+  productTitle: string;
+  quantity: number;
+  unitPrice: number;
+  image?: string;
 }
 
 export type OrderStatus = 'new' | 'called' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
@@ -58,6 +88,21 @@ export interface Order {
   grandTotal: number;
   status: OrderStatus;
   notes?: string;
+  items?: OrderItem[];
+}
+
+export interface StoreBanner {
+  title: string;
+  subtitle: string;
+  badgeText: string;
+  ctaText: string;
+  ctaLink: string;
+  imageUrl: string;
+  enabled: boolean;
+  heroImageUrl?: string;
+  heroImageBadge?: string;
+  showHeroImage?: boolean;
+  showImageBadge?: boolean;
 }
 
 export interface PixelConfig {
@@ -74,3 +119,4 @@ export interface PixelEventLog {
   eventName: string;
   data: Record<string, any>;
 }
+

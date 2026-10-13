@@ -76,17 +76,17 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
     <div className="w-full flex flex-col gap-3 select-none">
       {/* Main Responsive Image Frame */}
       <div 
-        className="relative w-full rounded-2xl overflow-hidden border border-stone-200/60 shadow-md group transition-all duration-300 bg-white"
+        className="relative w-full rounded-2xl overflow-hidden border border-[#f7dfe8] shadow-[0_4px_15px_rgba(217,79,134,0.06)] group transition-all duration-300 bg-white"
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
-        {/* Responsive Aspect Ratio Container tailored for mobile */}
-        <div className="relative w-full aspect-[4/5] max-h-[640px] flex items-center justify-center overflow-hidden bg-stone-100">
+        {/* Responsive Aspect Ratio Container */}
+        <div className="relative w-full aspect-[4/5] max-h-[640px] flex items-center justify-center overflow-hidden bg-[#fff8f5]">
           
           {/* Ambient Backdrop Blur */}
           <div 
-            className="absolute inset-0 bg-cover bg-center filter blur-2xl opacity-70 scale-125 pointer-events-none transition-all duration-500"
+            className="absolute inset-0 bg-cover bg-center filter blur-2xl opacity-60 scale-125 pointer-events-none transition-all duration-500"
             style={{ backgroundImage: `url(${currentImage})` }}
           />
 
@@ -104,7 +104,7 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
           />
 
           {/* Image index badge */}
-          <div className="absolute top-3 right-3 z-20 px-2.5 py-1 rounded-full bg-stone-900/75 backdrop-blur-md text-white text-xs font-semibold tracking-wider border border-white/10">
+          <div className="absolute top-3 right-3 z-20 px-2.5 py-1 rounded-full bg-[#4a2b3d]/80 backdrop-blur-md text-white text-xs font-semibold tracking-wider border border-white/15">
             {currentIndex + 1} / {displayImages.length}
           </div>
 
@@ -113,7 +113,7 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
             <button
               type="button"
               onClick={() => setAspectMode(prev => prev === 'cover' ? 'contain' : 'cover')}
-              className="px-2 py-1 rounded-lg bg-stone-900/75 hover:bg-stone-900 text-stone-200 text-[11px] font-medium border border-white/10 backdrop-blur-md transition-colors"
+              className="px-2 py-1 rounded-lg bg-[#4a2b3d]/80 hover:bg-[#4a2b3d] text-white text-[11px] font-medium border border-white/15 backdrop-blur-md transition-colors cursor-pointer"
               title="تغيير نمط العرض (كامل / احتواء)"
             >
               {aspectMode === 'cover' ? 'عرض ممتلئ' : 'عرض كامل'}
@@ -121,7 +121,7 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
             <button
               type="button"
               onClick={() => setIsFullscreen(true)}
-              className="p-1.5 rounded-lg bg-stone-900/75 hover:bg-stone-900 text-stone-200 border border-white/10 backdrop-blur-md transition-colors"
+              className="p-1.5 rounded-lg bg-[#4a2b3d]/80 hover:bg-[#4a2b3d] text-white border border-white/15 backdrop-blur-md transition-colors cursor-pointer"
               title="تكبير الصورة"
               aria-label="تكبير الصورة"
             >
@@ -136,7 +136,7 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
                 type="button"
                 onClick={handlePrev}
                 aria-label="الصورة السابقة"
-                className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/90 hover:bg-white text-stone-800 flex items-center justify-center shadow-lg transition-transform active:scale-95 sm:opacity-90 hover:scale-105 cursor-pointer"
+                className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/95 hover:bg-white text-[#4a2b3d] flex items-center justify-center shadow-[0_4px_15px_rgba(217,79,134,0.15)] transition-transform active:scale-95 sm:opacity-90 hover:scale-105 cursor-pointer"
               >
                 <ChevronRight className="w-5 h-5" />
               </button>
@@ -144,7 +144,7 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
                 type="button"
                 onClick={handleNext}
                 aria-label="الصورة التالية"
-                className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/90 hover:bg-white text-stone-800 flex items-center justify-center shadow-lg transition-transform active:scale-95 sm:opacity-90 hover:scale-105 cursor-pointer"
+                className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/95 hover:bg-white text-[#4a2b3d] flex items-center justify-center shadow-[0_4px_15px_rgba(217,79,134,0.15)] transition-transform active:scale-95 sm:opacity-90 hover:scale-105 cursor-pointer"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
@@ -153,13 +153,13 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
 
           {/* Swipe indicator dots for mobile */}
           {displayImages.length > 1 && (
-            <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 px-2 py-1 rounded-full bg-stone-900/60 backdrop-blur-sm">
+            <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 px-2 py-1 rounded-full bg-[#4a2b3d]/60 backdrop-blur-sm">
               {displayImages.map((_, idx) => (
                 <button
                   key={idx}
                   onClick={() => setCurrentIndex(idx)}
-                  className={`h-1.5 rounded-full transition-all duration-300 ${
-                    idx === currentIndex ? 'w-5 bg-rose-500' : 'w-1.5 bg-white/60 hover:bg-white'
+                  className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
+                    idx === currentIndex ? 'w-5 bg-[#d94f86]' : 'w-1.5 bg-white/60 hover:bg-white'
                   }`}
                   aria-label={`انتقل للصورة ${idx + 1}`}
                 />
@@ -169,7 +169,7 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
         </div>
       </div>
 
-      {/* Customer Thumbnails Row (Clean: Only product photos) */}
+      {/* Customer Thumbnails Row */}
       <div className="flex items-center gap-2 overflow-x-auto py-1 px-0.5 no-scrollbar">
         {displayImages.map((img, idx) => (
           <button
@@ -178,8 +178,8 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
             onClick={() => setCurrentIndex(idx)}
             className={`relative flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border-2 transition-all duration-200 bg-white cursor-pointer ${
               idx === currentIndex
-                ? 'border-rose-600 scale-102 shadow-md ring-2 ring-rose-600/30'
-                : 'border-stone-200 hover:border-stone-400 opacity-70 hover:opacity-100'
+                ? 'border-[#d94f86] scale-102 shadow-md ring-2 ring-[#d94f86]/30'
+                : 'border-[#f7dfe8] hover:border-[#edd6e0] opacity-80 hover:opacity-100'
             }`}
           >
             <img
@@ -195,17 +195,17 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
       {/* Fullscreen Lightbox Modal */}
       {isFullscreen && (
         <div 
-          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/95 backdrop-blur-md p-4 animate-in fade-in"
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#4a2b3d]/95 backdrop-blur-md p-4 animate-in fade-in"
           onClick={() => setIsFullscreen(false)}
         >
           <div className="absolute top-4 right-4 z-50 flex items-center gap-3">
-            <span className="text-white/80 text-sm font-semibold">
-              {currentIndex + 1} / {images.length}
+            <span className="text-white/90 text-sm font-semibold">
+              {currentIndex + 1} / {displayImages.length}
             </span>
             <button
               type="button"
               onClick={() => setIsFullscreen(false)}
-              className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+              className="p-2 rounded-full bg-white/15 hover:bg-white/25 text-white transition-colors cursor-pointer"
               aria-label="إغلاق التكبير"
             >
               <X className="w-6 h-6" />
@@ -219,22 +219,22 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
             <img
               src={currentImage}
               alt={productTitle}
-              className="max-h-[82vh] max-w-full object-contain rounded-lg shadow-2xl transition-all"
+              className="max-h-[82vh] max-w-full object-contain rounded-xl shadow-2xl transition-all"
             />
 
-            {images.length > 1 && (
+            {displayImages.length > 1 && (
               <>
                 <button
                   type="button"
                   onClick={handlePrev}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/20 hover:bg-white/40 text-white backdrop-blur transition-all cursor-pointer"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/20 hover:bg-white/35 text-white backdrop-blur transition-all cursor-pointer"
                 >
                   <ChevronRight className="w-6 h-6" />
                 </button>
                 <button
                   type="button"
                   onClick={handleNext}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/20 hover:bg-white/40 text-white backdrop-blur transition-all cursor-pointer"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/20 hover:bg-white/35 text-white backdrop-blur transition-all cursor-pointer"
                 >
                   <ChevronLeft className="w-6 h-6" />
                 </button>

@@ -1,0 +1,166 @@
+{
+  "entities": {
+    "Order": {
+      "title": "Order",
+      "description": "Customer order details placed via storefront or checkout",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "orderNumber": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "fullName": { "type": "string" },
+        "phone": { "type": "string" },
+        "wilayaCode": { "type": "number" },
+        "wilayaName": { "type": "string" },
+        "commune": { "type": "string" },
+        "deliveryType": { "type": "string", "enum": ["home", "desk"] },
+        "deliveryFee": { "type": "number" },
+        "productId": { "type": "string" },
+        "productTitle": { "type": "string" },
+        "quantity": { "type": "number" },
+        "unitPrice": { "type": "number" },
+        "productTotal": { "type": "number" },
+        "grandTotal": { "type": "number" },
+        "status": { "type": "string", "enum": ["new", "called", "confirmed", "shipped", "delivered", "cancelled"] },
+        "notes": { "type": "string" },
+        "items": { "type": "array" }
+      },
+      "required": [
+        "orderNumber",
+        "createdAt",
+        "fullName",
+        "phone",
+        "wilayaCode",
+        "wilayaName",
+        "commune",
+        "deliveryType",
+        "deliveryFee",
+        "productId",
+        "productTitle",
+        "quantity",
+        "unitPrice",
+        "productTotal",
+        "grandTotal",
+        "status"
+      ]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Storefront product document in products collection",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "brandName": { "type": "string" },
+        "title": { "type": "string" },
+        "tagline": { "type": "string" },
+        "price": { "type": "number" },
+        "originalPrice": { "type": "number" },
+        "currency": { "type": "string" },
+        "images": { "type": "array", "items": { "type": "string" } },
+        "keyPoints": { "type": "array", "items": { "type": "string" } },
+        "keyPointsTitle": { "type": "string" },
+        "specs": { "type": "array" },
+        "specsTitle": { "type": "string" },
+        "rating": { "type": "number" },
+        "reviewsCount": { "type": "number" },
+        "inStock": { "type": "boolean" },
+        "guaranteeText": { "type": "string" },
+        "categoryId": { "type": "string" },
+        "categorySlug": { "type": "string" },
+        "categoryName": { "type": "string" },
+        "isFeatured": { "type": "boolean" },
+        "isVisible": { "type": "boolean" },
+        "stockCount": { "type": "number" },
+        "description": { "type": "string" }
+      },
+      "required": ["id", "title", "price"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Product category classification",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "slug": { "type": "string" },
+        "description": { "type": "string" },
+        "icon": { "type": "string" },
+        "order": { "type": "number" }
+      },
+      "required": ["id", "name", "slug"]
+    },
+    "ProductSettings": {
+      "title": "ProductSettings",
+      "description": "Storefront legacy product details and media (/settings/product)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "brandName": { "type": "string" },
+        "title": { "type": "string" },
+        "tagline": { "type": "string" },
+        "price": { "type": "number" },
+        "currency": { "type": "string" },
+        "images": { "type": "array", "items": { "type": "string" } },
+        "keyPoints": { "type": "array", "items": { "type": "string" } },
+        "keyPointsTitle": { "type": "string" },
+        "specs": { "type": "array" },
+        "specsTitle": { "type": "string" },
+        "rating": { "type": "number" },
+        "reviewsCount": { "type": "number" },
+        "inStock": { "type": "boolean" },
+        "guaranteeText": { "type": "string" }
+      }
+    },
+    "ReviewsSettings": {
+      "title": "ReviewsSettings",
+      "description": "Storefront customer reviews collection (/settings/reviews)",
+      "type": "object",
+      "properties": {
+        "items": { "type": "array" }
+      }
+    },
+    "PixelSettings": {
+      "title": "PixelSettings",
+      "description": "Advertising pixel tracking configuration (/settings/pixels)",
+      "type": "object",
+      "properties": {
+        "metaPixelId": { "type": "string" },
+        "tikTokPixelId": { "type": "string" },
+        "googleTagId": { "type": "string" },
+        "enabled": { "type": "boolean" }
+      }
+    },
+    "BannerSettings": {
+      "title": "BannerSettings",
+      "description": "Homepage main hero banner configuration (/settings/banner)",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "badgeText": { "type": "string" },
+        "ctaText": { "type": "string" },
+        "ctaLink": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "enabled": { "type": "boolean" }
+      }
+    }
+  },
+  "firestore": {
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Collection of customer orders"
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Store catalog products collection"
+    },
+    "/categories/{categoryId}": {
+      "schema": "Category",
+      "description": "Store categories classification collection"
+    },
+    "/settings/{docId}": {
+      "schema": "object",
+      "description": "Storefront configuration and catalog documents (product, reviews, pixels, banner)"
+    }
+  }
+}

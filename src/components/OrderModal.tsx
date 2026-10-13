@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BeautyProduct, DeliveryType, Order } from '../types';
 import { ALGERIA_WILAYAS, getWilayaByCode } from '../data/wilayas';
 import { TrackingService } from '../services/tracking';
+import { createFirestoreOrder } from '../services/firebase';
 import { 
   X, Check, ShieldCheck, Home, Building2, 
   Sparkles, AlertCircle, Phone, User, MapPin, 
@@ -91,15 +92,16 @@ export const OrderModal: React.FC<OrderModalProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
 
     setIsSubmitting(true);
     const orderNumber = `RB-${Math.floor(100000 + Math.random() * 900000)}`;
+    const orderId = `ord-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
     const newOrder: Order = {
-      id: Math.random().toString(36).substring(2, 9),
+      id: orderId,
       orderNumber,
       createdAt: new Date().toLocaleString('ar-DZ'),
       fullName: fullName.trim(),
@@ -129,35 +131,39 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       phone: phone.trim()
     });
 
-    setTimeout(() => {
-      setIsSubmitting(false);
-      onSubmitOrder(newOrder);
-      onClose();
-    }, 500);
+    try {
+      await createFirestoreOrder(newOrder);
+    } catch (err) {
+      console.error('Failed to save order to Firestore:', err);
+    }
+
+    setIsSubmitting(false);
+    onSubmitOrder(newOrder);
+    onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-in fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#4a2b3d]/50 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-in fade-in">
       <div 
-        className="bg-white rounded-3xl max-w-lg w-full max-h-[95vh] overflow-y-auto shadow-2xl border border-rose-200 text-right relative animate-in zoom-in-95"
+        className="bg-white rounded-3xl max-w-lg w-full max-h-[95vh] overflow-y-auto shadow-2xl border border-[#f7dfe8] text-right relative animate-in zoom-in-95"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Top Header with Close Button */}
-        <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-md px-5 py-4 border-b border-rose-100 flex items-center justify-between">
+        <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-md px-5 py-4 border-b border-[#f7dfe8] flex items-center justify-between">
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-full text-stone-400 hover:text-stone-800 hover:bg-stone-100 transition-colors cursor-pointer"
+            className="p-2 rounded-full text-[#8a6b7a] hover:text-[#4a2b3d] hover:bg-[#fdeaf1] transition-colors cursor-pointer"
             aria-label="إغلاق"
           >
             <X className="w-5 h-5" />
           </button>
 
           <div className="text-center flex-1 pr-6">
-            <h2 className="text-lg sm:text-xl font-black text-stone-900 tracking-tight">
+            <h2 className="text-lg sm:text-xl font-black text-[#4a2b3d] tracking-tight">
               للطلب يرجى ملء المعلومات
             </h2>
-            <p className="text-[11px] text-stone-500 font-medium">
+            <p className="text-[11px] text-[#8a6b7a] font-medium">
               الدفع نقداً عند الاستلام بعد المعاينة والتأكد من الجهاز 🤝
             </p>
           </div>
@@ -167,36 +173,36 @@ export const OrderModal: React.FC<OrderModalProps> = ({
         <form onSubmit={handleSubmit} className="p-5 sm:p-6 flex flex-col gap-4">
           
           {/* Product Mini Preview & Quantity */}
-          <div className="flex items-center justify-between p-3 bg-rose-50/50 rounded-2xl border border-rose-100">
+          <div className="flex items-center justify-between p-3 bg-[#fdeaf1]/50 rounded-2xl border border-[#f7dfe8]">
             <div className="flex items-center gap-2.5">
               <img 
                 src={product.images[0]} 
                 alt={product.title} 
-                className="w-12 h-12 rounded-xl object-cover border border-rose-200" 
+                className="w-12 h-12 rounded-xl object-cover border border-[#f7dfe8]" 
               />
               <div>
-                <div className="text-xs font-bold text-stone-900 line-clamp-1">{product.title}</div>
-                <div className="text-xs font-black text-rose-600">
+                <div className="text-xs font-bold text-[#4a2b3d] line-clamp-1">{product.title}</div>
+                <div className="text-xs font-black text-[#d94f86]">
                   {product.price.toLocaleString()} {product.currency}
                 </div>
               </div>
             </div>
 
             {/* Quantity Selector */}
-            <div className="flex items-center gap-2 bg-white px-2 py-1 rounded-xl border border-rose-200">
+            <div className="flex items-center gap-2 bg-white px-2 py-1 rounded-xl border border-[#f7dfe8]">
               <button
                 type="button"
                 onClick={() => setQuantity(prev => Math.max(1, prev - 1))}
-                className="w-6 h-6 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-800 flex items-center justify-center cursor-pointer"
+                className="w-6 h-6 rounded-lg bg-[#fdeaf1] hover:bg-[#f7dfe8] text-[#4a2b3d] flex items-center justify-center cursor-pointer"
                 title="تقليل"
               >
                 <Minus className="w-3 h-3" />
               </button>
-              <span className="font-bold text-xs text-stone-900 w-4 text-center">{quantity}</span>
+              <span className="font-bold text-xs text-[#4a2b3d] w-4 text-center">{quantity}</span>
               <button
                 type="button"
                 onClick={() => setQuantity(prev => prev + 1)}
-                className="w-6 h-6 rounded-lg bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center cursor-pointer"
+                className="w-6 h-6 rounded-lg bg-[#d94f86] hover:bg-[#c93d78] text-white flex items-center justify-center cursor-pointer"
                 title="زيادة"
               >
                 <Plus className="w-3 h-3" />
@@ -206,10 +212,10 @@ export const OrderModal: React.FC<OrderModalProps> = ({
 
           {/* Field: Phone Number (رقم الهاتف) */}
           <div>
-            <label className="block text-xs font-bold text-stone-800 mb-1 flex items-center gap-1">
-              <Phone className="w-3.5 h-3.5 text-rose-600" />
+            <label className="block text-xs font-bold text-[#4a2b3d] mb-1 flex items-center gap-1">
+              <Phone className="w-3.5 h-3.5 text-[#d94f86]" />
               <span>رقم الهاتف</span>
-              <span className="text-rose-500">*</span>
+              <span className="text-[#d94f86]">*</span>
             </label>
             <input
               type="tel"
@@ -220,14 +226,14 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                 if (errors.phone) setErrors({ ...errors, phone: '' });
               }}
               placeholder="05 / 06 / 07 XX XX XX XX"
-              className={`w-full px-3.5 py-3 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 font-mono text-right ${
+              className={`w-full px-3.5 py-3 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 font-mono text-right text-[#4a2b3d] ${
                 errors.phone
-                  ? 'border-rose-400 bg-rose-50/30 focus:ring-rose-500'
-                  : 'border-stone-300 bg-stone-50/50 focus:border-rose-500 focus:ring-rose-500/20 focus:bg-white'
+                  ? 'border-[#d94f86] bg-[#fdeaf1]/40 focus:ring-[#d94f86]/30'
+                  : 'border-[#f7dfe8] bg-[#fff8f5] focus:border-[#d94f86] focus:ring-[#d94f86]/20 focus:bg-white'
               }`}
             />
             {errors.phone && (
-              <p className="mt-1 text-xs text-rose-600 flex items-center gap-1">
+              <p className="mt-1 text-xs text-[#c93d78] flex items-center gap-1">
                 <AlertCircle className="w-3 h-3" />
                 <span>{errors.phone}</span>
               </p>
@@ -236,10 +242,10 @@ export const OrderModal: React.FC<OrderModalProps> = ({
 
           {/* Field: Full Name (الاسم الكامل) */}
           <div>
-            <label className="block text-xs font-bold text-stone-800 mb-1 flex items-center gap-1">
-              <User className="w-3.5 h-3.5 text-rose-600" />
+            <label className="block text-xs font-bold text-[#4a2b3d] mb-1 flex items-center gap-1">
+              <User className="w-3.5 h-3.5 text-[#d94f86]" />
               <span>الاسم الكامل</span>
-              <span className="text-rose-500">*</span>
+              <span className="text-[#d94f86]">*</span>
             </label>
             <input
               type="text"
@@ -249,32 +255,32 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                 if (errors.fullName) setErrors({ ...errors, fullName: '' });
               }}
               placeholder="مثال: مريم بلقاسم"
-              className={`w-full px-3.5 py-3 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 ${
+              className={`w-full px-3.5 py-3 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 text-[#4a2b3d] ${
                 errors.fullName
-                  ? 'border-rose-400 bg-rose-50/30 focus:ring-rose-500'
-                  : 'border-stone-300 bg-stone-50/50 focus:border-rose-500 focus:ring-rose-500/20 focus:bg-white'
+                  ? 'border-[#d94f86] bg-[#fdeaf1]/40 focus:ring-[#d94f86]/30'
+                  : 'border-[#f7dfe8] bg-[#fff8f5] focus:border-[#d94f86] focus:ring-[#d94f86]/20 focus:bg-white'
               }`}
             />
             {errors.fullName && (
-              <p className="mt-1 text-xs text-rose-600 flex items-center gap-1">
+              <p className="mt-1 text-xs text-[#c93d78] flex items-center gap-1">
                 <AlertCircle className="w-3 h-3" />
                 <span>{errors.fullName}</span>
               </p>
             )}
           </div>
 
-          {/* Field: Wilaya (58 wilayas) & Commune */}
+          {/* Field: Wilaya (69 wilayas) & Commune */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-stone-800 mb-1 flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5 text-rose-600" />
-                <span>الولاية (58 ولاية)</span>
-                <span className="text-rose-500">*</span>
+              <label className="block text-xs font-bold text-[#4a2b3d] mb-1 flex items-center gap-1">
+                <MapPin className="w-3.5 h-3.5 text-[#d94f86]" />
+                <span>الولاية (69 ولاية)</span>
+                <span className="text-[#d94f86]">*</span>
               </label>
               <select
                 value={selectedWilayaCode}
                 onChange={(e) => setSelectedWilayaCode(Number(e.target.value))}
-                className="w-full px-3 py-3 rounded-xl border border-stone-300 bg-stone-50/50 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 focus:bg-white text-xs font-semibold"
+                className="w-full px-3 py-3 rounded-xl border border-[#f7dfe8] bg-[#fff8f5] focus:border-[#d94f86] focus:ring-2 focus:ring-[#d94f86]/20 focus:bg-white text-xs font-semibold text-[#4a2b3d]"
               >
                 {ALGERIA_WILAYAS.map((w) => (
                   <option key={w.code} value={w.code}>
@@ -285,14 +291,14 @@ export const OrderModal: React.FC<OrderModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-stone-800 mb-1">
-                البلدية <span className="text-rose-500">*</span>
+              <label className="block text-xs font-bold text-[#4a2b3d] mb-1">
+                البلدية <span className="text-[#d94f86]">*</span>
               </label>
               {selectedWilaya.communes && selectedWilaya.communes.length > 0 ? (
                 <select
                   value={selectedCommune}
                   onChange={(e) => setSelectedCommune(e.target.value)}
-                  className="w-full px-3 py-3 rounded-xl border border-stone-300 bg-stone-50/50 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 focus:bg-white text-xs font-semibold"
+                  className="w-full px-3 py-3 rounded-xl border border-[#f7dfe8] bg-[#fff8f5] focus:border-[#d94f86] focus:ring-2 focus:ring-[#d94f86]/20 focus:bg-white text-xs font-semibold text-[#4a2b3d]"
                 >
                   {selectedWilaya.communes.map((com, idx) => (
                     <option key={idx} value={com}>
@@ -306,15 +312,15 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                   value={selectedCommune}
                   onChange={(e) => setSelectedCommune(e.target.value)}
                   placeholder="اكتبي البلدية"
-                  className="w-full px-3 py-3 rounded-xl border border-stone-300 bg-stone-50/50 text-xs focus:border-rose-500 focus:bg-white"
+                  className="w-full px-3 py-3 rounded-xl border border-[#f7dfe8] bg-[#fff8f5] text-xs text-[#4a2b3d] focus:border-[#d94f86] focus:bg-white"
                 />
               )}
             </div>
           </div>
 
-          {/* Interactive Delivery Cards: "إلى المنزل" (خلال 48 ساعة) vs "مكتب التوصيل" (خلال 24 ساعة) */}
+          {/* Interactive Delivery Cards: "إلى المنزل" vs "مكتب التوصيل" */}
           <div>
-            <label className="block text-xs font-bold text-stone-800 mb-2">
+            <label className="block text-xs font-bold text-[#4a2b3d] mb-2">
               طريقة التوصيل:
             </label>
             <div className="grid grid-cols-2 gap-2.5">
@@ -324,27 +330,27 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                 onClick={() => setDeliveryType('home')}
                 className={`cursor-pointer rounded-2xl p-3 border-2 flex flex-col justify-between gap-1 transition-all ${
                   deliveryType === 'home'
-                    ? 'border-red-600 bg-red-50/40 shadow-sm ring-1 ring-red-600/30'
-                    : 'border-stone-200 bg-stone-50/40 hover:border-stone-300'
+                    ? 'border-[#d94f86] bg-[#fdeaf1]/40 shadow-xs ring-1 ring-[#d94f86]/30'
+                    : 'border-[#f7dfe8] bg-white hover:border-[#edd6e0]'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    <Home className={`w-4 h-4 ${deliveryType === 'home' ? 'text-red-600' : 'text-stone-500'}`} />
-                    <span className="text-xs font-bold text-stone-900">إلى المنزل</span>
+                    <Home className={`w-4 h-4 ${deliveryType === 'home' ? 'text-[#d94f86]' : 'text-[#8a6b7a]'}`} />
+                    <span className="text-xs font-bold text-[#4a2b3d]">إلى المنزل</span>
                   </div>
                   <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                    deliveryType === 'home' ? 'border-red-600 bg-red-600 text-white' : 'border-stone-400 bg-white'
+                    deliveryType === 'home' ? 'border-[#d94f86] bg-[#d94f86] text-white' : 'border-[#edd6e0] bg-white'
                   }`}>
                     {deliveryType === 'home' && <Check className="w-3 h-3 stroke-[3]" />}
                   </div>
                 </div>
 
-                <div className="text-[11px] text-stone-500">
+                <div className="text-[11px] text-[#8a6b7a]">
                   (خلال 48 ساعة)
                 </div>
 
-                <div className="mt-1 pt-1 border-t border-stone-100 text-xs font-extrabold text-stone-900">
+                <div className="mt-1 pt-1 border-t border-[#f7dfe8] text-xs font-extrabold text-[#4a2b3d]">
                   {selectedWilaya.homeDeliveryPrice} {product.currency}
                 </div>
               </div>
@@ -354,27 +360,27 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                 onClick={() => setDeliveryType('desk')}
                 className={`cursor-pointer rounded-2xl p-3 border-2 flex flex-col justify-between gap-1 transition-all ${
                   deliveryType === 'desk'
-                    ? 'border-red-600 bg-red-50/40 shadow-sm ring-1 ring-red-600/30'
-                    : 'border-stone-200 bg-stone-50/40 hover:border-stone-300'
+                    ? 'border-[#d94f86] bg-[#fdeaf1]/40 shadow-xs ring-1 ring-[#d94f86]/30'
+                    : 'border-[#f7dfe8] bg-white hover:border-[#edd6e0]'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    <Building2 className={`w-4 h-4 ${deliveryType === 'desk' ? 'text-red-600' : 'text-stone-500'}`} />
-                    <span className="text-xs font-bold text-stone-900">مكتب التوصيل</span>
+                    <Building2 className={`w-4 h-4 ${deliveryType === 'desk' ? 'text-[#d94f86]' : 'text-[#8a6b7a]'}`} />
+                    <span className="text-xs font-bold text-[#4a2b3d]">مكتب التوصيل</span>
                   </div>
                   <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                    deliveryType === 'desk' ? 'border-red-600 bg-red-600 text-white' : 'border-stone-400 bg-white'
+                    deliveryType === 'desk' ? 'border-[#d94f86] bg-[#d94f86] text-white' : 'border-[#edd6e0] bg-white'
                   }`}>
                     {deliveryType === 'desk' && <Check className="w-3 h-3 stroke-[3]" />}
                   </div>
                 </div>
 
-                <div className="text-[11px] text-stone-500">
+                <div className="text-[11px] text-[#8a6b7a]">
                   (خلال 24 ساعة)
                 </div>
 
-                <div className="mt-1 pt-1 border-t border-stone-100 text-xs font-extrabold text-stone-900">
+                <div className="mt-1 pt-1 border-t border-[#f7dfe8] text-xs font-extrabold text-[#4a2b3d]">
                   {selectedWilaya.deskDeliveryPrice} {product.currency}
                 </div>
               </div>
@@ -389,19 +395,19 @@ export const OrderModal: React.FC<OrderModalProps> = ({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="ملاحظات إضافية أو وقت الاتصال المفضل (اختياري)..."
-              className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50/40 text-xs focus:outline-none focus:border-red-500 focus:bg-white"
+              className="w-full px-3 py-2 rounded-xl border border-[#f7dfe8] bg-[#fff8f5] text-xs text-[#4a2b3d] focus:outline-none focus:border-[#d94f86] focus:bg-white"
             />
           </div>
 
           {/* Grand Total Summary Display */}
-          <div className="p-3.5 bg-stone-50 rounded-2xl border border-stone-200 flex items-center justify-between">
+          <div className="p-3.5 bg-[#fff8f5] rounded-2xl border border-[#f7dfe8] flex items-center justify-between">
             <div>
-              <span className="text-xs text-stone-600 block">المبلغ الإجمالي المطلوب عند الاستلام:</span>
-              <span className="text-[10px] text-stone-400">
+              <span className="text-xs text-[#4a2b3d] block font-medium">المبلغ الإجمالي المطلوب عند الاستلام:</span>
+              <span className="text-[10px] text-[#8a6b7a]">
                 (سعر الجهاز: {productTotal.toLocaleString()} + الشحن: {deliveryFee} د.ج)
               </span>
             </div>
-            <div className="text-xl sm:text-2xl font-black text-red-600">
+            <div className="text-xl sm:text-2xl font-black text-[#d94f86]">
               {grandTotal.toLocaleString()} {product.currency}
             </div>
           </div>
@@ -412,11 +418,11 @@ export const OrderModal: React.FC<OrderModalProps> = ({
             <span>معاينة وتفحص الجهاز قبل دفع أي دينار للموزع!</span>
           </div>
 
-          {/* Red Purchase Button: "اطمئن واطلب الآن" */}
+          {/* Rose Purchase Button: "اطمئن واطلب الآن" */}
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-red-600 hover:from-red-700 hover:to-rose-700 text-white font-black text-base sm:text-lg shadow-lg shadow-red-600/30 active:scale-99 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-75"
+            className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-[#e8709b] to-[#c93d78] hover:from-[#d94f86] hover:to-[#b8386d] text-white font-black text-base sm:text-lg shadow-lg shadow-rose-900/20 active:scale-99 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-75"
           >
             {isSubmitting ? (
               <div className="flex items-center gap-2">
@@ -425,7 +431,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
               </div>
             ) : (
               <>
-                <Sparkles className="w-5 h-5 text-yellow-300 animate-pulse" />
+                <Sparkles className="w-5 h-5 text-[#f9d784] animate-pulse" />
                 <span>اطمئن واطلب الآن</span>
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-white/20 font-bold mr-1">
                   {grandTotal.toLocaleString()} {product.currency}
@@ -435,9 +441,9 @@ export const OrderModal: React.FC<OrderModalProps> = ({
           </button>
 
           {/* Support Helpline: 0777413872 */}
-          <div className="text-center text-[11px] text-stone-500 font-medium">
+          <div className="text-center text-[11px] text-[#8a6b7a] font-medium">
             هل لديك أي استفسار؟ اتصلي بخدمة الزبائن على الرقم:{' '}
-            <a href="tel:0777413872" className="text-rose-600 font-bold font-mono">
+            <a href="tel:0777413872" className="text-[#d94f86] font-bold font-mono">
               0777413872
             </a>
           </div>

@@ -1,6 +1,39 @@
 @import "tailwindcss";
 
+@theme {
+  --color-brand: #d94f86;
+  --color-brand-light: #e8709b;
+  --color-brand-dark: #c93d78;
+  --color-brand-deep: #b8386d;
+  --color-gold: #c9a45c;
+  --color-cream: #fff8f5;
+  --color-plum: #4a2b3d;
+  --color-plum-light: #60354f;
+  --color-muted: #8a6b7a;
+  --color-surface-rose: #fdeaf1;
+  --color-surface-lavender: #f4ecf8;
+  --color-border-rose: #f7dfe8;
+  --color-border-hover: #edd6e0;
+}
+
 @layer base {
+  :root {
+    --color-primary: #d94f86;
+    --color-primary-light: #e8709b;
+    --color-primary-dark: #c93d78;
+    --color-primary-deep: #b8386d;
+    --color-secondary: #c9a45c;
+    --color-bg-page: #fff8f5;
+    --color-card: #ffffff;
+    --color-surface-rose: #fdeaf1;
+    --color-surface-lavender: #f4ecf8;
+    --color-border-rose: #f7dfe8;
+    --color-text-main: #4a2b3d;
+    --color-text-secondary: #8a6b7a;
+    --color-brand: #d94f86;
+    --shadow-brand-soft: 0 10px 25px -5px rgba(217, 79, 134, 0.18), 0 8px 10px -6px rgba(217, 79, 134, 0.12);
+  }
+
   * {
     font-family: 'Cairo', 'Tajawal', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
@@ -8,6 +41,12 @@
   html {
     scroll-behavior: smooth;
     -webkit-tap-highlight-color: transparent;
+    background-color: #fff8f5;
+  }
+
+  body {
+    background-color: #fff8f5;
+    color: #4a2b3d;
   }
 }
 
@@ -18,4 +57,21 @@
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* Infinite marquee animations */
+@keyframes marquee-rtl {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(50%);
+  }
+}
+
+.animate-marquee-rtl {
+  display: flex;
+  width: max-content;
+  animation: marquee-rtl 18s linear infinite;
+  will-change: transform;
 }

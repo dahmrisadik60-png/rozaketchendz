@@ -24,7 +24,17 @@ export const DEFAULT_PIXEL_CONFIG: PixelConfig = {
   enabled: true
 };
 
+let currentRuntimePixelConfig: PixelConfig | null = null;
+
+export function setRuntimePixelConfig(config: PixelConfig): void {
+  currentRuntimePixelConfig = config;
+  initPixels(config);
+}
+
 export function getPixelConfig(): PixelConfig {
+  if (currentRuntimePixelConfig) {
+    return currentRuntimePixelConfig;
+  }
   try {
     const raw = localStorage.getItem(STORAGE_PIXEL_CONFIG_KEY);
     if (raw) return JSON.parse(raw);
@@ -241,6 +251,55 @@ export const TrackingService = {
       try {
         window.gtag('event', 'view_item', {
           items: [{ id: product.id, name: product.title, price: product.price }]
+        });
+      } catch (e) {}
+    }
+  },
+
+  // AddToCart
+  trackAddToCart(product: { id: string; title: string; price: number; currency: string; quantity: number }) {
+    const config = getPixelConfig();
+    const data = {
+      content_name: product.title,
+      content_ids: [product.id],
+      content_type: 'product',
+      value: product.price * product.quantity,
+      currency: 'DZD',
+      num_items: product.quantity
+    };
+
+    addPixelLog({
+      platform: 'All',
+      eventName: 'AddToCart',
+      data
+    });
+
+    if (!config.enabled) return;
+
+    if (window.fbq) {
+      try {
+        window.fbq('track', 'AddToCart', data);
+      } catch (e) {}
+    }
+    if (window.ttq) {
+      try {
+        window.ttq.track('AddToCart', {
+          content_id: product.id,
+          content_type: 'product',
+          content_name: product.title,
+          quantity: product.quantity,
+          price: product.price,
+          value: product.price * product.quantity,
+          currency: 'DZD'
+        });
+      } catch (e) {}
+    }
+    if (window.gtag && config.googleTagId) {
+      try {
+        window.gtag('event', 'add_to_cart', {
+          value: product.price * product.quantity,
+          currency: 'DZD',
+          items: [{ id: product.id, name: product.title, price: product.price, quantity: product.quantity }]
         });
       } catch (e) {}
     }

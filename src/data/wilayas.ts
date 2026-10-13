@@ -469,6 +469,94 @@ export const ALGERIA_WILAYAS: Wilaya[] = [
     homeDeliveryPrice: 850,
     deskDeliveryPrice: 600,
     communes: ["المنيعة", "حاسي الفحل", "حاسي القارة"]
+  },
+  {
+    code: 59,
+    nameAr: "59 - أفلو",
+    nameFr: "59 - Aflou",
+    homeDeliveryPrice: 750,
+    deskDeliveryPrice: 500,
+    communes: ["أفلو", "سبقاق", "سيدي بوزيد", "الغيشة", "تاجرونة", "واد مرة", "البيضاء"]
+  },
+  {
+    code: 60,
+    nameAr: "60 - بريكة",
+    nameFr: "60 - Barika",
+    homeDeliveryPrice: 650,
+    deskDeliveryPrice: 450,
+    communes: ["بريكة", "أولاد عمار", "أولاد منعة", "أمدوكال", "بيطام", "الجزار", "سفيان"]
+  },
+  {
+    code: 61,
+    nameAr: "61 - قصر الشلالة",
+    nameFr: "61 - Ksar Chellala",
+    homeDeliveryPrice: 700,
+    deskDeliveryPrice: 450,
+    communes: ["قصر الشلالة", "سرغين", "زمالة الأمير عبد القادر"]
+  },
+  {
+    code: 62,
+    nameAr: "62 - مسعد",
+    nameFr: "62 - Messaad",
+    homeDeliveryPrice: 750,
+    deskDeliveryPrice: 500,
+    communes: ["مسعد", "دلدول", "سلمانة", "أم العظام", "فيض البطمة", "القطارة"]
+  },
+  {
+    code: 63,
+    nameAr: "63 - عين وسارة",
+    nameFr: "63 - Ain Oussara",
+    homeDeliveryPrice: 750,
+    deskDeliveryPrice: 500,
+    communes: ["عين وسارة", "القرنيني", "بنهار", "بيرين", "حد الصحاري"]
+  },
+  {
+    code: 64,
+    nameAr: "64 - بوسعادة",
+    nameFr: "64 - Bou Saada",
+    homeDeliveryPrice: 700,
+    deskDeliveryPrice: 450,
+    communes: ["بوسعادة", "الهامل", "ولماس", "المعاريف", "تامسة", "بن سرور", "محمد بوضياف"]
+  },
+  {
+    code: 65,
+    nameAr: "65 - الأبيض سيدي الشيخ",
+    nameFr: "65 - El Abiodh Sidi Cheikh",
+    homeDeliveryPrice: 800,
+    deskDeliveryPrice: 550,
+    communes: ["الأبيض سيدي الشيخ", "عين العراك", "البنود", "بريزينة", "بوسمغون"]
+  },
+  {
+    code: 66,
+    nameAr: "66 - القنطرة",
+    nameFr: "66 - El Kantara",
+    homeDeliveryPrice: 700,
+    deskDeliveryPrice: 450,
+    communes: ["القنطرة", "عين زعطوط", "الوطاية", "جمورة"]
+  },
+  {
+    code: 67,
+    nameAr: "67 - بئر العاتر",
+    nameFr: "67 - Bir El Ater",
+    homeDeliveryPrice: 750,
+    deskDeliveryPrice: 500,
+    communes: ["بئر العاتر", "العقلة", "أم علي", "صفصاف الوسرى", "فركان", "سطح قنطيس"]
+  },
+  {
+    code: 68,
+    nameAr: "68 - قصر البخاري",
+    nameFr: "68 - Ksar El Boukhari",
+    homeDeliveryPrice: 650,
+    deskDeliveryPrice: 400,
+    communes: ["قصر البخاري", "سانق", "مفتاح", "عزيز", "أم الجليل", "الشهبونية"]
+  },
+  {
+    code: 69,
+    nameAr: "69 - العريشة",
+    nameFr: "69 - El Aricha",
+    homeDeliveryPrice: 650,
+    deskDeliveryPrice: 450,
+    communes: ["العريشة", "القور", "سبدو", "البويهي", "سيدي الجيلالي"]
   }
 ];
 

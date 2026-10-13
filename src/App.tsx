@@ -1,33 +1,82 @@
 import React, { useState, useEffect } from 'react';
-import { BeautyProduct, Order, CustomerReview } from './types';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { 
+  BeautyProduct, 
+  Order, 
+  CustomerReview, 
+  ProductCategory, 
+  StoreBanner 
+} from './types';
 import { 
   getStoredProduct, 
   getStoredOrders, 
-  saveOrder, 
   saveStoredProduct, 
   getStoredReviews, 
   saveStoredReviews 
 } from './services/storage';
-import { TrackingService, initPixels } from './services/tracking';
+import { TrackingService, initPixels, setRuntimePixelConfig } from './services/tracking';
+import { 
+  subscribeToProduct, 
+  subscribeToReviews, 
+  subscribeToPixelConfig,
+  subscribeToProducts,
+  subscribeToCategories,
+  subscribeToBanner,
+  runStorefrontMigration
+} from './services/firebase';
+import { CartProvider } from './context/CartProvider';
 import { Header } from './components/Header';
-import { ImageGallery } from './components/ImageGallery';
-import { ProductDetails } from './components/ProductDetails';
-import { CustomerReviews } from './components/CustomerReviews';
+import { CartDrawer } from './components/CartDrawer';
 import { OrderModal } from './components/OrderModal';
-import { StickyMobileBar } from './components/StickyMobileBar';
-import { AdminModal } from './components/AdminModal';
 import { SuccessModal } from './components/SuccessModal';
+import { AdminModal } from './components/AdminModal';
 import { Footer } from './components/Footer';
+
+// Pages
+import { HomePage } from './pages/HomePage';
+import { ProductPage } from './pages/ProductPage';
+import { CategoryPage } from './pages/CategoryPage';
+import { CheckoutPage } from './pages/CheckoutPage';
+
+import { DEFAULT_CATEGORIES, DEFAULT_BANNER } from './data/categories';
+import { ROZA_BEAUTY_PRODUCT } from './data/products';
 
 export default function App() {
   const [product, setProduct] = useState<BeautyProduct | null>(null);
+  const [productsList, setProductsList] = useState<BeautyProduct[]>([]);
+  const [categories, setCategories] = useState<ProductCategory[]>(DEFAULT_CATEGORIES);
+  const [banner, setBanner] = useState<StoreBanner>(DEFAULT_BANNER);
   const [orders, setOrders] = useState<Order[]>([]);
   const [reviews, setReviews] = useState<CustomerReview[]>([]);
+
+  // Direct buy popup modal state (same behavior as before)
+  const [modalProduct, setModalProduct] = useState<BeautyProduct | null>(null);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
-  const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
 
+  // Admin Modal (opens via Footer Lock, Header Lock, Drawer, or /admin URL)
+  const [isAdminOpen, setIsAdminOpen] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.location.pathname === '/admin' || window.location.hash === '#admin';
+  });
+
   useEffect(() => {
+    const handleUrlCheck = () => {
+      if (window.location.pathname === '/admin' || window.location.hash === '#admin') {
+        setIsAdminOpen(true);
+      }
+    };
+    handleUrlCheck();
+    window.addEventListener('popstate', handleUrlCheck);
+    window.addEventListener('hashchange', handleUrlCheck);
+    return () => {
+      window.removeEventListener('popstate', handleUrlCheck);
+      window.removeEventListener('hashchange', handleUrlCheck);
+    };
+  }, []);
+
+  useEffect(() => {
+    // 1. Initial local load
     const loadedProduct = getStoredProduct();
     const loadedOrders = getStoredOrders();
     const loadedReviews = getStoredReviews();
@@ -35,27 +84,66 @@ export default function App() {
     setOrders(loadedOrders);
     setReviews(loadedReviews);
 
-    // Initialize Pixels
-    initPixels();
-    TrackingService.trackPageView('RozaBeauty_LandingPage');
-
+    // Initial products fallback with loaded product
     if (loadedProduct) {
-      TrackingService.trackViewContent({
-        id: loadedProduct.id,
-        title: loadedProduct.title,
-        price: loadedProduct.price,
-        currency: loadedProduct.currency
-      });
+      setProductsList([loadedProduct]);
     }
+
+    // 2. Initialize Pixels
+    initPixels();
+    TrackingService.trackPageView('RozaBeauty_Home');
+
+    // 3. Automatic 1-time migration if products collection is empty
+    runStorefrontMigration();
+
+    // 4. Live sync from Firestore
+    const unsubProduct = subscribeToProduct((firestoreProduct) => {
+      setProduct(firestoreProduct);
+      saveStoredProduct(firestoreProduct);
+    });
+
+    const unsubProducts = subscribeToProducts((allProds) => {
+      if (allProds.length > 0) {
+        setProductsList(allProds);
+      }
+    });
+
+    const unsubCategories = subscribeToCategories((allCats) => {
+      if (allCats.length > 0) {
+        setCategories(allCats);
+      }
+    });
+
+    const unsubBanner = subscribeToBanner((b) => {
+      setBanner(b);
+    });
+
+    const unsubReviews = subscribeToReviews((firestoreReviews) => {
+      setReviews(firestoreReviews);
+      saveStoredReviews(firestoreReviews);
+    });
+
+    const unsubPixels = subscribeToPixelConfig((firestorePixels) => {
+      setRuntimePixelConfig(firestorePixels);
+    });
+
+    return () => {
+      unsubProduct();
+      unsubProducts();
+      unsubCategories();
+      unsubBanner();
+      unsubReviews();
+      unsubPixels();
+    };
   }, []);
 
-  const handleOpenOrderModal = () => {
+  const handleOpenDirectOrder = (targetProduct: BeautyProduct) => {
+    setModalProduct(targetProduct);
     setIsOrderModalOpen(true);
   };
 
   const handleOrderSubmitted = (newOrder: Order) => {
-    const updated = saveOrder(newOrder);
-    setOrders(updated);
+    setOrders((prev) => [newOrder, ...prev]);
     setCompletedOrder(newOrder);
   };
 
@@ -69,83 +157,126 @@ export default function App() {
     saveStoredReviews(updated);
   };
 
-  if (!product) {
-    return (
-      <div className="min-h-screen bg-rose-50/30 flex items-center justify-center">
-        <div className="w-8 h-8 border-3 border-rose-600 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  const activeProduct = product || ROZA_BEAUTY_PRODUCT;
+  const currentCatalog = productsList.length > 0 ? productsList : [activeProduct];
 
   return (
-    <div className="min-h-screen bg-stone-100/70 text-stone-900 font-sans antialiased flex flex-col selection:bg-rose-500 selection:text-white">
-      {/* Official Header (PIN protected admin access, contact 0777413872) */}
-      <Header onOpenAdminPrompt={() => setIsAdminOpen(true)} />
+    <BrowserRouter>
+      <CartProvider>
+        <div className="min-h-screen bg-[#fff8f5] text-[#4a2b3d] font-sans antialiased flex flex-col selection:bg-[#d94f86] selection:text-white">
+          {/* Official Header with Search, Cart Counter, Favorites, 0777413872 */}
+          <Header
+            onOpenAdminPrompt={() => setIsAdminOpen(true)}
+            categories={categories}
+          />
 
-      {/* Main Container - Mobile First layout */}
-      <main className="flex-1 max-w-3xl mx-auto w-full px-3.5 sm:px-6 py-4 sm:py-6 flex flex-col gap-8">
-        
-        {/* Top Product Showcase (Gallery + Details) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-7 items-start">
-          {/* Smart Responsive Image Engine */}
-          <div className="w-full sticky md:top-20">
-            <ImageGallery
-              images={product.images}
-              productTitle={product.title}
+          {/* Slideout Cart Drawer */}
+          <CartDrawer />
+
+          {/* Main App Container */}
+          <main className="flex-1 max-w-6xl mx-auto w-full px-3.5 sm:px-6 py-4 sm:py-6">
+            <Routes>
+              {/* Home Page: Hero Banner, 4 Perks, Categories & Products Grid */}
+              <Route
+                path="/"
+                element={
+                  <HomePage
+                    products={currentCatalog}
+                    categories={categories}
+                    banner={banner}
+                    onDirectOrder={handleOpenDirectOrder}
+                  />
+                }
+              />
+
+              {/* Dynamic Product Page: Exact design of original landing page, dynamic for any id */}
+              <Route
+                path="/product/:id"
+                element={
+                  <ProductPage
+                    products={currentCatalog}
+                    reviews={reviews}
+                    onOpenOrderModal={handleOpenDirectOrder}
+                  />
+                }
+              />
+
+              {/* Category Page with sorting & price filter */}
+              <Route
+                path="/category/:slug"
+                element={
+                  <CategoryPage
+                    products={currentCatalog}
+                    categories={categories}
+                    onDirectOrder={handleOpenDirectOrder}
+                  />
+                }
+              />
+
+              {/* Checkout Page: 69 wilayas, order notes, WhatsApp thank-you confirmation */}
+              <Route path="/checkout" element={<CheckoutPage />} />
+
+              {/* Admin Direct Route: opens AdminModal directly on /admin */}
+              <Route
+                path="/admin"
+                element={
+                  <HomePage
+                    products={currentCatalog}
+                    categories={categories}
+                    banner={banner}
+                    onDirectOrder={handleOpenDirectOrder}
+                  />
+                }
+              />
+
+              {/* Catch-all redirect to Home */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </main>
+
+          {/* Direct Buy Popup Modal ("أطلب الآن" maintains exact original behavior) */}
+          {modalProduct && (
+            <OrderModal
+              isOpen={isOrderModalOpen}
+              onClose={() => setIsOrderModalOpen(false)}
+              product={modalProduct}
+              onSubmitOrder={handleOrderSubmitted}
             />
-          </div>
+          )}
 
-          {/* Product Details (Direct price, 4 concise points & "أطلب الآن" CTA) */}
-          <div className="w-full">
-            <ProductDetails
-              product={product}
-              onOpenOrderModal={handleOpenOrderModal}
-            />
-          </div>
+          {/* Success Confirmation Modal */}
+          <SuccessModal
+            order={completedOrder}
+            onClose={() => setCompletedOrder(null)}
+          />
+
+          {/* Admin Dashboard (PIN 2009 + Google Auth dahmrisadik60@gmail.com) */}
+          <AdminModal
+            isOpen={isAdminOpen}
+            onClose={() => {
+              setIsAdminOpen(false);
+              if (window.location.pathname === '/admin' || window.location.hash === '#admin') {
+                window.history.replaceState(null, '', '/');
+              }
+            }}
+            product={activeProduct}
+            onProductUpdated={handleProductUpdated}
+            orders={orders}
+            onOrdersUpdated={(updated) => setOrders(updated)}
+            reviews={reviews}
+            onReviewsUpdated={handleReviewsUpdated}
+            products={currentCatalog}
+            categories={categories}
+            banner={banner}
+          />
+
+          {/* Official Footer with 0777413872 contact & 69 wilayas */}
+          <Footer 
+            onOpenAdminPrompt={() => setIsAdminOpen(true)} 
+            categories={categories}
+          />
         </div>
-
-        {/* Customer Reviews Section in Algerian Darija (Dynamic Live Sync) */}
-        <div className="w-full pt-4 border-t border-rose-100/80">
-          <CustomerReviews reviews={reviews} />
-        </div>
-
-      </main>
-
-      {/* Sticky Mobile Bar with "أطلب الآن" opening the Order Popup Modal */}
-      <StickyMobileBar
-        price={product.price}
-        currency={product.currency}
-        onOpenOrderModal={handleOpenOrderModal}
-      />
-
-      {/* Popup Order Modal ("للطلب يرجى ملء المعلومات") */}
-      <OrderModal
-        isOpen={isOrderModalOpen}
-        onClose={() => setIsOrderModalOpen(false)}
-        product={product}
-        onSubmitOrder={handleOrderSubmitted}
-      />
-
-      {/* Success Modal upon order completion */}
-      <SuccessModal
-        order={completedOrder}
-        onClose={() => setCompletedOrder(null)}
-      />
-
-      {/* Admin Dashboard Protected by PIN 2009 with Dynamic Product & Reviews Manager */}
-      <AdminModal
-        isOpen={isAdminOpen}
-        onClose={() => setIsAdminOpen(false)}
-        product={product}
-        onProductUpdated={handleProductUpdated}
-        orders={orders}
-        onOrdersUpdated={(updated) => setOrders(updated)}
-        reviews={reviews}
-        onReviewsUpdated={handleReviewsUpdated}
-      />
-
-      {/* Official Footer with 0777413872 contact & 58 wilayas coverage */}
-      <Footer onOpenAdminPrompt={() => setIsAdminOpen(true)} />
-    </div>
+      </CartProvider>
+    </BrowserRouter>
   );
 }
