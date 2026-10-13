@@ -1,4 +1,6 @@
-import { PixelConfig, PixelEventLog } from '../types';
+import { collection, doc, setDoc } from 'firebase/firestore';
+import { db } from './firebase';
+import { PixelConfig, PixelEventLog, TrackingEventType } from '../types';
 
 declare global {
   interface Window {
@@ -16,6 +18,121 @@ declare global {
 
 const STORAGE_PIXEL_CONFIG_KEY = 'roza_dz_pixel_config';
 const STORAGE_PIXEL_LOGS_KEY = 'roza_dz_pixel_logs';
+const STORAGE_UTM_SOURCE_KEY = 'roza_dz_utm_source';
+const STORAGE_UTM_CAMPAIGN_KEY = 'roza_dz_utm_campaign';
+
+/**
+ * Initializes and persists UTM traffic source in sessionStorage on first visit
+ */
+export function initTrafficSource(): string {
+  if (typeof window === 'undefined') return 'direct';
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const utmSource = params.get('utm_source') || params.get('source');
+    const utmCampaign = params.get('utm_campaign') || params.get('campaign');
+
+    if (utmSource) {
+      const cleanSource = utmSource.trim().toLowerCase().slice(0, 64);
+      sessionStorage.setItem(STORAGE_UTM_SOURCE_KEY, cleanSource);
+      if (utmCampaign) {
+        sessionStorage.setItem(STORAGE_UTM_CAMPAIGN_KEY, utmCampaign.trim().slice(0, 128));
+      }
+      return cleanSource;
+    }
+
+    const existing = sessionStorage.getItem(STORAGE_UTM_SOURCE_KEY);
+    if (existing) {
+      return existing;
+    }
+
+    // Infer from document.referrer
+    let inferred = 'direct';
+    const ref = (document.referrer || '').toLowerCase();
+    if (ref.includes('facebook.com') || ref.includes('fb.com') || ref.includes('fb.me')) {
+      inferred = 'facebook';
+    } else if (ref.includes('instagram.com')) {
+      inferred = 'instagram';
+    } else if (ref.includes('tiktok.com')) {
+      inferred = 'tiktok';
+    } else if (ref.includes('google.com') || ref.includes('google.dz')) {
+      inferred = 'google';
+    } else if (ref.includes('snapchat.com')) {
+      inferred = 'snapchat';
+    } else if (ref.includes('youtube.com') || ref.includes('youtu.be')) {
+      inferred = 'youtube';
+    } else if (ref) {
+      try {
+        const url = new URL(ref);
+        inferred = url.hostname.replace(/^www\./, '').slice(0, 32);
+      } catch {
+        inferred = 'referral';
+      }
+    }
+
+    sessionStorage.setItem(STORAGE_UTM_SOURCE_KEY, inferred);
+    return inferred;
+  } catch (err) {
+    console.warn('Traffic source init warning:', err);
+    return 'direct';
+  }
+}
+
+/**
+ * Retrieves the current visitor's traffic source (e.g. facebook, instagram, direct)
+ */
+export function getTrafficSource(): string {
+  if (typeof window === 'undefined') return 'direct';
+  try {
+    const src = sessionStorage.getItem(STORAGE_UTM_SOURCE_KEY);
+    if (src) return src;
+    return initTrafficSource();
+  } catch {
+    return 'direct';
+  }
+}
+
+/**
+ * Logs an event to the Firestore 'events' collection
+ * Strictly non-blocking for visitor reliability
+ */
+export async function logStoreEvent(
+  type: TrackingEventType,
+  payload: {
+    productId?: string;
+    query?: string;
+    orderId?: string;
+    total?: number;
+    source?: string;
+  } = {}
+): Promise<void> {
+  try {
+    const source = payload.source || getTrafficSource() || 'direct';
+    const eventDocRef = doc(collection(db, 'events'));
+    const docData: Record<string, any> = {
+      type,
+      source: source.slice(0, 64),
+      createdAt: new Date().toISOString()
+    };
+
+    if (payload.productId) {
+      docData.productId = String(payload.productId).slice(0, 128);
+    }
+    if (payload.query) {
+      docData.query = String(payload.query).trim().slice(0, 128);
+    }
+    if (payload.orderId) {
+      docData.orderId = String(payload.orderId).slice(0, 128);
+    }
+    if (payload.total !== undefined && payload.total !== null) {
+      docData.total = Number(payload.total) || 0;
+    }
+
+    await setDoc(eventDocRef, docData);
+  } catch (err) {
+    // Non-fatal for users
+    console.warn('Store event logging error:', err);
+  }
+}
 
 export const DEFAULT_PIXEL_CONFIG: PixelConfig = {
   metaPixelId: '',
@@ -229,6 +346,11 @@ export const TrackingService = {
       data
     });
 
+    // Also persist event to Firestore /events collection
+    if (product.id) {
+      logStoreEvent('product_view', { productId: product.id });
+    }
+
     if (!config.enabled) return;
 
     if (window.fbq) {
@@ -273,6 +395,11 @@ export const TrackingService = {
       eventName: 'AddToCart',
       data
     });
+
+    // Also persist event to Firestore /events collection
+    if (product.id) {
+      logStoreEvent('add_to_cart', { productId: product.id });
+    }
 
     if (!config.enabled) return;
 
@@ -387,6 +514,13 @@ export const TrackingService = {
       data: { order_id: order.orderNumber, value: order.grandTotal, currency: 'DZD' }
     });
 
+    // Persist order_placed event to Firestore /events collection
+    logStoreEvent('order_placed', {
+      orderId: order.orderNumber,
+      total: order.grandTotal,
+      productId: order.productId
+    });
+
     if (!config.enabled) return;
 
     if (window.fbq) {
@@ -425,5 +559,40 @@ export const TrackingService = {
         });
       } catch (e) {}
     }
+  },
+
+  // Search
+  trackSearch(query: string) {
+    if (!query || !query.trim()) return;
+    const cleanQuery = query.trim();
+
+    addPixelLog({
+      platform: 'All',
+      eventName: 'Search',
+      data: { query: cleanQuery }
+    });
+
+    // Persist search query to Firestore /events collection
+    logStoreEvent('search', { query: cleanQuery });
+
+    const config = getPixelConfig();
+    if (!config.enabled) return;
+
+    if (window.fbq) {
+      try {
+        window.fbq('track', 'Search', { search_string: cleanQuery });
+      } catch (e) {}
+    }
+    if (window.ttq) {
+      try {
+        window.ttq.track('Search', { query: cleanQuery });
+      } catch (e) {}
+    }
+    if (window.gtag && config.googleTagId) {
+      try {
+        window.gtag('event', 'search', { search_term: cleanQuery });
+      } catch (e) {}
+    }
   }
 };
+

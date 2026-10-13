@@ -120,3 +120,52 @@ export interface PixelEventLog {
   data: Record<string, any>;
 }
 
+export type TrackingEventType = 'product_view' | 'search' | 'add_to_cart' | 'order_placed';
+
+export interface TrackingEventDoc {
+  id?: string;
+  type: TrackingEventType;
+  source: string;
+  createdAt: string;
+  productId?: string;
+  query?: string;
+  orderId?: string;
+  total?: number;
+}
+
+export interface AdSpend {
+  id: string;
+  source: string;
+  campaign?: string;
+  amount: number;
+  date: string;
+  createdAt: string;
+  notes?: string;
+}
+
+export interface SourceMetric {
+  source: string;
+  views: number;
+  cartAdds: number;
+  orders: number;
+  revenue: number;
+  spend: number;
+  costPerOrder: number;
+  roas: number;
+}
+
+export interface ProductMetric {
+  productId: string;
+  productTitle: string;
+  views: number;
+  cartAdds: number;
+  orders: number;
+  revenue: number;
+  conversionRate: number;
+}
+
+export interface SearchTermMetric {
+  query: string;
+  count: number;
+}
+

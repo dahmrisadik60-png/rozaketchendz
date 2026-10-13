@@ -6,6 +6,7 @@ import {
   ShoppingBag, CheckCircle2
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
+import { TrackingService } from '../services/tracking';
 
 interface HeaderProps {
   onOpenAdminPrompt: () => void;
@@ -22,6 +23,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAdminPrompt, categories = 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
+      TrackingService.trackSearch(searchQuery.trim());
       navigate(`/?q=${encodeURIComponent(searchQuery.trim())}#products`);
       setIsSearchOpen(false);
     }

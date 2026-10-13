@@ -35,7 +35,9 @@ import {
   CustomerReview, 
   PixelConfig,
   ProductCategory,
-  StoreBanner
+  StoreBanner,
+  TrackingEventDoc,
+  AdSpend
 } from '../types';
 import { ROZA_BEAUTY_PRODUCT } from '../data/products';
 import { ALGERIAN_CUSTOMER_REVIEWS } from '../data/reviews';
@@ -51,7 +53,7 @@ export const DEFAULT_PIXEL_CONFIG: PixelConfig = {
 };
 
 // Initialize Firebase App
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
 
 // CRITICAL: The app will break without specifying firestoreDatabaseId
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
@@ -833,3 +835,100 @@ export async function signOutAdmin(): Promise<void> {
 export function onAdminAuthStateChanged(callback: (user: User | null) => void): () => void {
   return onAuthStateChanged(auth, callback);
 }
+
+// -------------------------------------------------------------
+// ANALYTICS & EVENTS (/events)
+// -------------------------------------------------------------
+export function subscribeToEvents(
+  onUpdate: (events: TrackingEventDoc[]) => void,
+  onError?: (error: unknown) => void
+): () => void {
+  const collectionRef = collection(db, 'events');
+  return onSnapshot(
+    collectionRef,
+    (snapshot) => {
+      const events: TrackingEventDoc[] = [];
+      snapshot.forEach((d) => {
+        const data = d.data() as TrackingEventDoc;
+        events.push({
+          ...data,
+          id: d.id
+        });
+      });
+      // Sort newest first
+      events.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      onUpdate(events);
+    },
+    (error) => {
+      if (onError) onError(error);
+      console.error('Events snapshot listener error:', error);
+    }
+  );
+}
+
+// -------------------------------------------------------------
+// AD SPEND (/adSpend)
+// -------------------------------------------------------------
+export function subscribeToAdSpend(
+  onUpdate: (spends: AdSpend[]) => void,
+  onError?: (error: unknown) => void
+): () => void {
+  const collectionRef = collection(db, 'adSpend');
+  return onSnapshot(
+    collectionRef,
+    (snapshot) => {
+      const list: AdSpend[] = [];
+      snapshot.forEach((d) => {
+        const data = d.data() as AdSpend;
+        list.push({
+          ...data,
+          id: d.id
+        });
+      });
+      list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      onUpdate(list);
+    },
+    (error) => {
+      if (onError) onError(error);
+      console.error('AdSpend snapshot listener error:', error);
+    }
+  );
+}
+
+export async function saveAdSpend(spend: {
+  id?: string;
+  source: string;
+  campaign?: string;
+  amount: number;
+  date: string;
+  notes?: string;
+}): Promise<void> {
+  const spendId = spend.id || doc(collection(db, 'adSpend')).id;
+  const path = `adSpend/${spendId}`;
+  try {
+    const docRef = doc(db, 'adSpend', spendId);
+    const payload: AdSpend = {
+      id: spendId,
+      source: spend.source.trim().toLowerCase(),
+      campaign: spend.campaign ? spend.campaign.trim() : '',
+      amount: Number(spend.amount) || 0,
+      date: spend.date,
+      createdAt: new Date().toISOString(),
+      notes: spend.notes || ''
+    };
+    await setDoc(docRef, stripUndefined(payload));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function deleteAdSpend(spendId: string): Promise<void> {
+  const path = `adSpend/${spendId}`;
+  try {
+    const docRef = doc(db, 'adSpend', spendId);
+    await deleteDoc(docRef);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+

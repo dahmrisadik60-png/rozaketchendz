@@ -14,7 +14,7 @@ import {
   getStoredReviews, 
   saveStoredReviews 
 } from './services/storage';
-import { TrackingService, initPixels, setRuntimePixelConfig } from './services/tracking';
+import { TrackingService, initPixels, setRuntimePixelConfig, initTrafficSource } from './services/tracking';
 import { 
   subscribeToProduct, 
   subscribeToReviews, 
@@ -89,7 +89,8 @@ export default function App() {
       setProductsList([loadedProduct]);
     }
 
-    // 2. Initialize Pixels
+    // 2. Initialize Traffic Source (UTM) & Pixels
+    initTrafficSource();
     initPixels();
     TrackingService.trackPageView('RozaBeauty_Home');
 

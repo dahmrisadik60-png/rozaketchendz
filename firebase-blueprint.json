@@ -143,6 +143,37 @@
         "imageUrl": { "type": "string" },
         "enabled": { "type": "boolean" }
       }
+    },
+    "TrackingEvent": {
+      "title": "TrackingEvent",
+      "description": "Storefront analytics event document in events collection",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["product_view", "search", "add_to_cart", "order_placed"] },
+        "source": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "productId": { "type": "string" },
+        "query": { "type": "string" },
+        "orderId": { "type": "string" },
+        "total": { "type": "number" }
+      },
+      "required": ["type", "source", "createdAt"]
+    },
+    "AdSpend": {
+      "title": "AdSpend",
+      "description": "Advertising campaign spend record in adSpend collection",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "source": { "type": "string" },
+        "campaign": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["source", "amount", "date", "createdAt"]
     }
   },
   "firestore": {
@@ -161,6 +192,14 @@
     "/settings/{docId}": {
       "schema": "object",
       "description": "Storefront configuration and catalog documents (product, reviews, pixels, banner)"
+    },
+    "/events/{eventId}": {
+      "schema": "TrackingEvent",
+      "description": "Analytics events collection"
+    },
+    "/adSpend/{spendId}": {
+      "schema": "AdSpend",
+      "description": "Advertising expenditure records collection"
     }
   }
 }

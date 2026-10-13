@@ -53,6 +53,31 @@ service cloud.firestore {
       (!('items' in data) || (data.items is list && data.items.size() <= 50));
     }
 
+    function isValidEvent(data) {
+      return data.keys().hasAll(['type', 'source', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'type', 'source', 'createdAt', 'productId', 'query', 'orderId', 'total']) &&
+        data.type in ['product_view', 'search', 'add_to_cart', 'order_placed'] &&
+        data.source is string && data.source.size() > 0 && data.source.size() <= 64 &&
+        data.createdAt is string && data.createdAt.size() > 0 && data.createdAt.size() <= 64 &&
+        (!('id' in data) || (data.id is string && data.id.size() <= 128)) &&
+        (!('productId' in data) || (data.productId is string && data.productId.size() <= 128)) &&
+        (!('query' in data) || (data.query is string && data.query.size() <= 128)) &&
+        (!('orderId' in data) || (data.orderId is string && data.orderId.size() <= 128)) &&
+        (!('total' in data) || (data.total is number));
+    }
+
+    function isValidAdSpend(data) {
+      return data.keys().hasAll(['source', 'amount', 'date', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'source', 'campaign', 'amount', 'date', 'createdAt', 'notes']) &&
+        data.source is string && data.source.size() > 0 && data.source.size() <= 64 &&
+        data.amount is number && data.amount >= 0 &&
+        data.date is string && data.date.size() > 0 && data.date.size() <= 32 &&
+        data.createdAt is string && data.createdAt.size() > 0 && data.createdAt.size() <= 64 &&
+        (!('id' in data) || (data.id is string && data.id.size() <= 128)) &&
+        (!('campaign' in data) || (data.campaign is string && data.campaign.size() <= 128)) &&
+        (!('notes' in data) || (data.notes is string && data.notes.size() <= 500));
+    }
+
     // 1) Orders collection:
     // Any visitor can create an order.
     // Only the authorized admin can read, list, update, and delete orders.
@@ -89,5 +114,23 @@ service cloud.firestore {
       allow get, list: if true;
       allow create, update, delete: if isAuthorizedAdmin();
     }
+
+    // 5) Events collection:
+    // Anyone can create events with strict validation.
+    // Only authorized admin can read, list, update, and delete events.
+    match /events/{eventId} {
+      allow create: if isValidId(eventId) && isValidEvent(request.resource.data);
+      allow get, list: if isAuthorizedAdmin();
+      allow update, delete: if isAuthorizedAdmin();
+    }
+
+    // 6) Ad Spend collection:
+    // Strictly authorized admin only.
+    match /adSpend/{spendId} {
+      allow get, list: if isAuthorizedAdmin();
+      allow create, update: if isAuthorizedAdmin() && isValidAdSpend(request.resource.data);
+      allow delete: if isAuthorizedAdmin();
+    }
   }
 }
+
