@@ -61,7 +61,7 @@ import {
   Package, Settings, Activity, Plus, Save, RefreshCw, 
   Send, Check, KeyRound, AlertCircle, Upload, CheckSquare, Square, 
   Star, Heart, Sparkles, Award, ListPlus, Image as ImageIcon, ShieldCheck,
-  Layers, LayoutTemplate, Edit, Eye, EyeOff
+  Layers, LayoutTemplate, Edit, Eye, EyeOff, Smartphone, Monitor, UploadCloud
 } from 'lucide-react';
 
 interface AdminModalProps {
@@ -150,6 +150,62 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const [editingProduct, setEditingProduct] = useState<BeautyProduct | null>(null);
   const [isCreatingProduct, setIsCreatingProduct] = useState(false);
   const [isSavingCatalogProduct, setIsSavingCatalogProduct] = useState(false);
+  const catalogFileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingCatalogImages, setIsUploadingCatalogImages] = useState(false);
+  const [isCatalogDragOver, setIsCatalogDragOver] = useState(false);
+
+  const handleCatalogFileUpload = async (files: FileList | File[] | null) => {
+    if (!files || files.length === 0 || !editingProduct) return;
+
+    const fileList = Array.from(files);
+    setIsUploadingCatalogImages(true);
+    showNotice(`⏳ جاري معالجة ورفع ${fileList.length} صورة للمنتج...`);
+
+    try {
+      const uploadedUrls: string[] = [];
+      for (const file of fileList) {
+        try {
+          const compressed = await compressImage(file, 900, 0.85);
+          const downloadUrl = await uploadImageToStorage(compressed);
+          uploadedUrls.push(downloadUrl);
+        } catch (storageErr) {
+          console.warn('Firebase storage upload failed, attempting direct upload:', storageErr);
+          try {
+            const downloadUrl = await uploadImageToStorage(file);
+            uploadedUrls.push(downloadUrl);
+          } catch (directErr) {
+            console.warn('Storage fallback to data URL:', directErr);
+            const dataUrl = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = reject;
+              reader.readAsDataURL(file);
+            });
+            uploadedUrls.push(dataUrl);
+          }
+        }
+      }
+
+      if (uploadedUrls.length > 0) {
+        setEditingProduct((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            images: [...prev.images, ...uploadedUrls]
+          };
+        });
+        showNotice(`✅ تم بنجاح إضافة ${uploadedUrls.length} صورة للمنتج من جهازك! اضغط "حفظ المنتج" لتثبيت التغييرات.`);
+      }
+    } catch (err) {
+      console.error('Failed to upload product images:', err);
+      showNotice('❌ حدث خطأ أثناء رفع الصور. يرجى التأكد من الملف والمحاولة مرة أخرى.');
+    } finally {
+      setIsUploadingCatalogImages(false);
+      if (catalogFileInputRef.current) {
+        catalogFileInputRef.current.value = '';
+      }
+    }
+  };
 
   const [editingCategory, setEditingCategory] = useState<ProductCategory | null>(null);
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
@@ -777,6 +833,23 @@ export const AdminModal: React.FC<AdminModalProps> = ({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Quick AI Advisor Button */}
+            {isAuthenticated && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('analytics')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-black rounded-xl transition-all cursor-pointer shadow-xs ${
+                  activeTab === 'analytics'
+                    ? 'bg-white text-[#d94f86] ring-2 ring-amber-300'
+                    : 'bg-gradient-to-r from-amber-400 to-rose-400 hover:from-amber-300 hover:to-rose-300 text-[#4a2b3d]'
+                }`}
+                title="فتح مستشار الذكاء الاصطناعي (AI)"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-[#4a2b3d]" />
+                <span>مستشار AI ✨</span>
+              </button>
+            )}
+
             {isAuthenticated && (
               !currentUser ? (
                 <button
@@ -972,18 +1045,21 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                 <span>الـ Pixels والتتبع</span>
               </button>
 
-              {/* Analytics & AI Insights tab - Visible only to logged-in admins */}
+              {/* Analytics & AI Insights tab - Visible to authenticated admins */}
               {(isGoogleAdmin || isAuthenticated) && (
                 <button
                   onClick={() => setActiveTab('analytics')}
                   className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
                     activeTab === 'analytics'
-                      ? 'border-[#d94f86] text-[#d94f86] bg-white rounded-t-xl shadow-xs'
+                      ? 'border-[#d94f86] text-[#d94f86] bg-white rounded-t-xl shadow-xs font-black'
                       : 'border-transparent text-[#8a6b7a] hover:text-[#4a2b3d]'
                   }`}
                 >
-                  <Sparkles className="w-4 h-4 text-[#d94f86]" />
-                  <span>التحليلات (Analytics)</span>
+                  <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
+                  <span>الذكاء الاصطناعي والتحليلات (AI)</span>
+                  <span className="px-1.5 py-0.5 text-[9px] bg-gradient-to-r from-amber-500 to-[#d94f86] text-white rounded-full font-black shadow-2xs">
+                    AI
+                  </span>
                 </button>
               )}
             </div>
@@ -1197,14 +1273,26 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                       </select>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => exportOrdersToCSV(localOrders)}
-                      className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
-                    >
-                      <Download className="w-4 h-4" />
-                      <span>تصدير الطلبات بملف Excel / CSV</span>
-                    </button>
+                    <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('analytics')}
+                        className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-[#d94f86] hover:from-amber-600 hover:to-[#c93d78] text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer whitespace-nowrap"
+                        title="تحليل شامل للمبيعات والطلبات بالذكاء الاصطناعي"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>تحليل المبيعات بـ AI</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => exportOrdersToCSV(localOrders)}
+                        className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer whitespace-nowrap"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>تصدير الطلبات بملف Excel / CSV</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Bulk Delete Toolbar */}
@@ -1527,12 +1615,37 @@ export const AdminModal: React.FC<AdminModalProps> = ({
 
                         {/* Tagline */}
                         <div className="sm:col-span-2">
-                          <label className="block font-bold text-[#4a2b3d] mb-1">الوصف المختصر (Tagline):</label>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="block font-bold text-[#4a2b3d]">الوصف المختصر (Tagline):</label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!editingProduct.title) {
+                                  alert('يرجى كتابة اسم أو عنوان المنتج أولاً لتوليد وصف ملائم');
+                                  return;
+                                }
+                                const suggestions = [
+                                  `الحل المثالي والأصلي لإطلالة ساحرة ونتائج احترافية في دقائق معدودة، مع ضمان الجودة والمعاينة عند الاستلام.`,
+                                  `تصميم عصري متطور لراحة يومية ونتائج مبهرة، توصيل سريع لـ 58 ولاية مع الدفع عند الاستلام.`,
+                                  `المنتج الأكثر طلباً لجودته العالية وسهولة استخدامه، مع ضمان استبدال مجاني وتجربة مضمونة.`,
+                                  `عناية فائقة تدوم طويلاً، متوفر الآن بسعر ترويجي حصري وكمية محدودة!`
+                                ];
+                                const pick = suggestions[Math.floor(Math.random() * suggestions.length)];
+                                setEditingProduct({ ...editingProduct, tagline: `${editingProduct.title} - ${pick}` });
+                                showNotice('✨ تم توليد وصف تسويقي جذاب بالذكاء الاصطناعي!');
+                              }}
+                              className="text-[11px] text-[#d94f86] hover:text-[#b8386d] font-black flex items-center gap-1 cursor-pointer hover:underline"
+                              title="توليد عبارة تسويقية جذابة للسوق الجزائري"
+                            >
+                              <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
+                              <span>توليد وصف ذكي (AI)</span>
+                            </button>
+                          </div>
                           <input
                             type="text"
                             value={editingProduct.tagline}
                             onChange={(e) => setEditingProduct({ ...editingProduct, tagline: e.target.value })}
-                            placeholder="عبارة تسويقية موجزة"
+                            placeholder="عبارة تسويقية موجزة ومحفزة للشراء"
                             className="w-full p-2.5 rounded-xl border border-[#f7dfe8] text-xs"
                           />
                         </div>
@@ -1616,18 +1729,108 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                           </label>
                         </div>
 
-                        {/* Images Management */}
-                        <div className="sm:col-span-2 pt-2 border-t border-[#f7dfe8]">
-                          <label className="block font-bold text-[#4a2b3d] mb-1">
-                            صور المنتج (الأولى رئيسية):
-                          </label>
-                          <div className="flex gap-2 mb-2">
+                        {/* Images Management with Device Upload (Phone/Desktop) & URL */}
+                        <div className="sm:col-span-2 pt-3 border-t border-[#f7dfe8]">
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="block font-bold text-[#4a2b3d] text-xs sm:text-sm flex items-center gap-1.5">
+                              <ImageIcon className="w-4 h-4 text-[#d94f86]" />
+                              <span>صور المنتج ({editingProduct.images.length} صور)</span>
+                              <span className="text-[11px] font-normal text-[#8a6b7a]">(الصورة الأولى هي الرئيسية)</span>
+                            </label>
+                            {editingProduct.images.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingProduct({
+                                    ...editingProduct,
+                                    images: [editingProduct.images[0]]
+                                  });
+                                }}
+                                className="text-[11px] text-rose-600 hover:text-rose-800 font-bold hover:underline cursor-pointer"
+                              >
+                                إبقاء الرئيسية فقط
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Upload Box: Phone or Desktop with support for ANY image format */}
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              setIsCatalogDragOver(true);
+                            }}
+                            onDragLeave={() => setIsCatalogDragOver(false)}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              setIsCatalogDragOver(false);
+                              if (e.dataTransfer.files) {
+                                handleCatalogFileUpload(e.dataTransfer.files);
+                              }
+                            }}
+                            className={`p-4 rounded-2xl border-2 border-dashed transition-all flex flex-col sm:flex-row items-center justify-between gap-3 mb-3 ${
+                              isCatalogDragOver
+                                ? 'border-[#d94f86] bg-[#fdeaf1]'
+                                : 'border-[#f7dfe8] bg-[#fff8f5] hover:border-[#d94f86]/50'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 text-right w-full sm:w-auto">
+                              <div className="w-10 h-10 rounded-xl bg-white border border-[#f7dfe8] flex items-center justify-center text-[#d94f86] shrink-0 shadow-2xs">
+                                <UploadCloud className="w-5 h-5" />
+                              </div>
+                              <div>
+                                <div className="text-xs sm:text-sm font-bold text-[#4a2b3d] flex items-center gap-2 flex-wrap">
+                                  <span>إضافة صور من الهاتف أو الكمبيوتر</span>
+                                  <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200">
+                                    <Smartphone className="w-3 h-3" />
+                                    <span>هاتف</span>
+                                    <span>/</span>
+                                    <Monitor className="w-3 h-3" />
+                                    <span>سطح المكتب</span>
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-[#8a6b7a] mt-0.5">
+                                  تُقبل الصور بأي صيغة (JPG, PNG, WebP, GIF, SVG, HEIC...). يمكنك اختيار عدة صور معاً.
+                                </p>
+                              </div>
+                            </div>
+
+                            <input
+                              ref={catalogFileInputRef}
+                              type="file"
+                              accept="image/*, .png, .jpg, .jpeg, .webp, .gif, .svg, .avif, .heic, .heif, .bmp, .ico"
+                              multiple
+                              className="hidden"
+                              onChange={(e) => handleCatalogFileUpload(e.target.files)}
+                            />
+
+                            <button
+                              type="button"
+                              onClick={() => catalogFileInputRef.current?.click()}
+                              disabled={isUploadingCatalogImages}
+                              className="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-[#b8386d] to-[#d94f86] hover:from-[#a32e5f] hover:to-[#c93d78] text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer shrink-0 disabled:opacity-50"
+                            >
+                              {isUploadingCatalogImages ? (
+                                <>
+                                  <RefreshCw className="w-4 h-4 animate-spin" />
+                                  <span>جاري الرفع والضغط...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Upload className="w-4 h-4" />
+                                  <span>اختيار صور من الجهاز</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+
+                          {/* Fallback Direct URL input */}
+                          <div className="flex gap-2 mb-3">
                             <input
                               type="url"
                               dir="ltr"
-                              placeholder="أدخل رابط صورة مباشر..."
+                              placeholder="أو أدخل رابط صورة مباشر من الإنترنت..."
                               id="new-catalog-img-input"
-                              className="flex-1 p-2 border border-[#f7dfe8] rounded-xl text-xs"
+                              className="flex-1 p-2 border border-[#f7dfe8] rounded-xl text-xs bg-white text-left focus:border-[#d94f86] focus:outline-none"
                             />
                             <button
                               type="button"
@@ -1641,31 +1844,70 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                                   input.value = '';
                                 }
                               }}
-                              className="px-3 py-2 bg-[#d94f86] hover:bg-[#c93d78] text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                              className="px-3.5 py-2 bg-[#fdeaf1] hover:bg-[#f7dfe8] text-[#4a2b3d] rounded-xl text-xs font-bold transition-colors cursor-pointer shrink-0 border border-[#f7dfe8]"
                             >
-                              إضافة
+                              إضافة الرابط
                             </button>
                           </div>
 
-                          <div className="flex flex-wrap gap-2">
-                            {editingProduct.images.map((img, i) => (
-                              <div key={i} className="relative w-16 h-16 rounded-xl border border-[#f7dfe8] overflow-hidden group">
-                                <img src={img} alt="" className="w-full h-full object-cover" />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setEditingProduct({
-                                      ...editingProduct,
-                                      images: editingProduct.images.filter((_, idx) => idx !== i)
-                                    });
-                                  }}
-                                  className="absolute top-1 right-1 p-1 bg-[#c93d78] hover:bg-[#b8386d] text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer shadow-xs"
+                          {/* Image Gallery Thumbnails */}
+                          {editingProduct.images.length === 0 ? (
+                            <div className="p-4 text-center bg-white rounded-xl border border-dashed border-[#f7dfe8] text-xs text-[#8a6b7a]">
+                              لا توجد صور لهذا المنتج بعد. اضغط على الزر الوردي أعلاه لاختيار صور من هاتفك أو سطح المكتب.
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
+                              {editingProduct.images.map((img, i) => (
+                                <div
+                                  key={i}
+                                  className={`relative rounded-xl border-2 overflow-hidden group bg-white shadow-xs aspect-square flex items-center justify-center ${
+                                    i === 0 ? 'border-[#d94f86] ring-2 ring-[#fdeaf1]' : 'border-[#f7dfe8]'
+                                  }`}
                                 >
-                                  <X className="w-3 h-3" />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
+                                  <img src={img} alt="" className="w-full h-full object-cover" />
+
+                                  {/* Badge for primary image */}
+                                  {i === 0 ? (
+                                    <span className="absolute top-1 right-1 px-1.5 py-0.5 bg-[#d94f86] text-white text-[9px] font-bold rounded-md shadow-xs flex items-center gap-0.5">
+                                      <Star className="w-2.5 h-2.5 fill-white" />
+                                      <span>الرئيسية</span>
+                                    </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const selected = editingProduct.images[i];
+                                        const rest = editingProduct.images.filter((_, idx) => idx !== i);
+                                        setEditingProduct({
+                                          ...editingProduct,
+                                          images: [selected, ...rest]
+                                        });
+                                      }}
+                                      title="تعيين هذه الصورة كرئيسية"
+                                      className="absolute top-1 right-1 px-1.5 py-0.5 bg-black/75 hover:bg-[#d94f86] text-white text-[9px] font-bold rounded-md opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer shadow-xs"
+                                    >
+                                      تعيين رئيسية
+                                    </button>
+                                  )}
+
+                                  {/* Delete button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingProduct({
+                                        ...editingProduct,
+                                        images: editingProduct.images.filter((_, idx) => idx !== i)
+                                      });
+                                    }}
+                                    title="حذف الصورة"
+                                    className="absolute bottom-1 left-1 p-1 bg-rose-600/90 hover:bg-rose-700 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer shadow-xs"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
 

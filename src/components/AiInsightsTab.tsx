@@ -25,6 +25,64 @@ interface AiInsightsTabProps {
   onNotice: (msg: string) => void;
 }
 
+const FormattedReportView: React.FC<{ text: string }> = ({ text }) => {
+  const renderFormattedLine = (line: string) => {
+    const parts = line.split(/(\*\*.*?\*\*)/g);
+    return parts.map((part, index) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return (
+          <strong key={index} className="font-black text-[#4a2b3d]">
+            {part.slice(2, -2)}
+          </strong>
+        );
+      }
+      return part;
+    });
+  };
+
+  const lines = text.split('\n');
+
+  return (
+    <div className="space-y-2 text-xs sm:text-sm text-[#4a2b3d] leading-relaxed">
+      {lines.map((rawLine, idx) => {
+        const line = rawLine.trim();
+        if (!line) return <div key={idx} className="h-0.5" />;
+
+        if (line.startsWith('## ') || line.startsWith('### ')) {
+          const title = line.replace(/^#{2,3}\s+/, '');
+          return (
+            <div key={idx} className="pt-2 pb-1 border-b border-[#f7dfe8]">
+              <h5 className="font-black text-sm sm:text-base text-[#8d2a58] flex items-center gap-2">
+                {title}
+              </h5>
+            </div>
+          );
+        }
+
+        if (line === '---') {
+          return <hr key={idx} className="my-2 border-[#f7dfe8]" />;
+        }
+
+        if (line.startsWith('- ') || line.startsWith('* ')) {
+          const bulletContent = line.slice(2);
+          return (
+            <div key={idx} className="flex items-start gap-2 pr-1 sm:pr-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#d94f86] mt-2 shrink-0" />
+              <div className="flex-1">{renderFormattedLine(bulletContent)}</div>
+            </div>
+          );
+        }
+
+        return (
+          <p key={idx} className="leading-relaxed">
+            {renderFormattedLine(line)}
+          </p>
+        );
+      })}
+    </div>
+  );
+};
+
 export const AiInsightsTab: React.FC<AiInsightsTabProps> = ({
   orders,
   products,
@@ -193,7 +251,90 @@ export const AiInsightsTab: React.FC<AiInsightsTabProps> = ({
         </div>
       )}
 
-      {/* 3. Primary KPI Metric Cards */}
+      {/* 3. "Analyze with AI" Section with Gemini Button (Hero Placement for Instant Access) */}
+      <div className="bg-gradient-to-r from-[#4a2b3d] via-[#6d3255] to-[#4a2b3d] text-white p-5 sm:p-6 rounded-3xl shadow-lg border-2 border-amber-300/30 ring-4 ring-rose-500/10">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="max-w-xl">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-400/20 text-amber-200 border border-amber-300/30 rounded-full text-[11px] font-black mb-2 backdrop-blur-xs">
+              <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-spin" style={{ animationDuration: '6s' }} />
+              <span>محلل الذكاء الاصطناعي للسوق الجزائري (Gemini AI Advisor)</span>
+            </div>
+            <h4 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
+              <span>استخراج تقرير استراتيجي فوري بالذكاء الاصطناعي</span>
+            </h4>
+            <p className="text-xs text-rose-100/80 mt-1 leading-relaxed">
+              يقوم الذكاء الاصطناعي بفحص جميع أرقام المبيعات، الزيارات، سلوك البحث، وتكلفة الإعلانات لتقديم توصيات تسعيرية، باقات ترويجية، كشف المنتجات الراكدة، وتقييم كفاءة كل قناة إعلانية.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleRunAiAnalysis}
+            disabled={isAiLoading}
+            className="w-full sm:w-auto px-6 py-3.5 bg-gradient-to-r from-amber-400 via-rose-500 to-[#d94f86] hover:from-amber-300 hover:to-[#c93d78] text-[#4a2b3d] hover:text-white font-black text-sm rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2.5 shrink-0 cursor-pointer disabled:opacity-50 transform hover:scale-[1.02] active:scale-[0.98]"
+          >
+            {isAiLoading ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                <span className="text-white">جاري تحليل الأرقام واستخراج الرؤى...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4 text-[#4a2b3d]" />
+                <span>⚡ تشغيل التحليل بالذكاء الاصطناعي الآن</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* AI Error display */}
+        {aiError && (
+          <div className="mt-4 p-3.5 bg-rose-900/80 border border-rose-400/50 rounded-xl text-rose-100 text-xs flex items-center justify-between gap-2">
+            <span>{aiError}</span>
+            <button
+              type="button"
+              onClick={handleRunAiAnalysis}
+              className="px-3 py-1 bg-white text-rose-900 rounded-lg text-xs font-bold hover:bg-rose-100 transition-colors cursor-pointer"
+            >
+              إعادة المحاولة
+            </button>
+          </div>
+        )}
+
+        {/* AI Report Card */}
+        {aiReport && (
+          <div className="mt-5 bg-white text-[#4a2b3d] p-5 sm:p-6 rounded-2xl border border-[#f7dfe8] shadow-sm animate-in fade-in">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#f7dfe8]">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                <span className="font-bold text-sm text-[#4a2b3d]">تقرير المستشار الذكي (Roza AI Advisor)</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleCopyReport}
+                className="px-3 py-1.5 bg-[#fff8f5] hover:bg-[#fdeaf1] text-[#d94f86] border border-[#f7dfe8] rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="نسخ التقرير"
+              >
+                {isCopied ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>تم النسخ!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>نسخ التقرير</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <FormattedReportView text={aiReport} />
+          </div>
+        )}
+      </div>
+
+      {/* 4. Primary KPI Metric Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
         <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-[#f7dfe8] shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-[#8a6b7a] text-xs font-medium mb-1">
@@ -260,91 +401,6 @@ export const AiInsightsTab: React.FC<AiInsightsTabProps> = ({
           </div>
           <div className="text-[10px] text-[#8a6b7a] mt-1">ROAS المداخيل/الإنفاق</div>
         </div>
-      </div>
-
-      {/* 4. "Analyze with AI" Section with Gemini Button */}
-      <div className="bg-gradient-to-r from-[#4a2b3d] to-[#6d3255] text-white p-5 sm:p-6 rounded-3xl shadow-md">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="max-w-xl">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 rounded-full text-[11px] font-bold text-rose-200 mb-2 backdrop-blur-xs">
-              <Sparkles className="w-3.5 h-3.5 text-rose-300" />
-              <span>محلل الذكاء الاصطناعي للسوق الجزائري</span>
-            </div>
-            <h4 className="text-lg sm:text-xl font-black text-white">
-              استخراج تقرير استراتيجي بالذكاء الاصطناعي
-            </h4>
-            <p className="text-xs text-rose-100/80 mt-1 leading-relaxed">
-              تحليل مجمع للأرقام السابقة فقط (دون إرسال أي أسماء أو أرقام زبائن) لتقديم توصيات تسعيرية، باقات ترويجية، كشف المنتجات الراكدة، وتقييم كفاءة كل قناة إعلانية.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleRunAiAnalysis}
-            disabled={isAiLoading}
-            className="w-full sm:w-auto px-6 py-3.5 bg-gradient-to-r from-[#d94f86] to-[#b8386d] hover:from-[#c93d78] hover:to-[#a72e60] text-white font-black text-sm rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2.5 shrink-0 cursor-pointer disabled:opacity-50"
-          >
-            {isAiLoading ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin text-white" />
-                <span>جاري التحليل واستخراج الرؤى...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4 text-white" />
-                <span>تحليل الأداء بالذكاء الاصطناعي</span>
-              </>
-            )}
-          </button>
-        </div>
-
-        {/* AI Error display */}
-        {aiError && (
-          <div className="mt-4 p-3.5 bg-rose-900/60 border border-rose-400/40 rounded-xl text-rose-100 text-xs flex items-center justify-between gap-2">
-            <span>{aiError}</span>
-            <button
-              type="button"
-              onClick={handleRunAiAnalysis}
-              className="px-3 py-1 bg-white text-rose-900 rounded-lg text-xs font-bold hover:bg-rose-100 transition-colors"
-            >
-              إعادة المحاولة
-            </button>
-          </div>
-        )}
-
-        {/* AI Report Card */}
-        {aiReport && (
-          <div className="mt-5 bg-white text-[#4a2b3d] p-5 sm:p-6 rounded-2xl border border-[#f7dfe8] shadow-sm animate-in fade-in">
-            <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#f7dfe8]">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                <span className="font-bold text-sm text-[#4a2b3d]">تقرير المستشار الذكي (Roza AI Advisor)</span>
-              </div>
-              <button
-                type="button"
-                onClick={handleCopyReport}
-                className="px-3 py-1.5 bg-[#fff8f5] hover:bg-[#fdeaf1] text-[#d94f86] border border-[#f7dfe8] rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-                title="نسخ التقرير"
-              >
-                {isCopied ? (
-                  <>
-                    <Check className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>تم النسخ!</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>نسخ التقرير</span>
-                  </>
-                )}
-              </button>
-            </div>
-
-            <div className="text-xs sm:text-sm leading-relaxed whitespace-pre-line text-[#4a2b3d] font-normal space-y-2">
-              {aiReport}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* 5. Products Performance Breakdown (3 Cards) */}

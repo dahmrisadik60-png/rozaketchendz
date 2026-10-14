@@ -277,16 +277,24 @@ ${!summary.hasMinimumSevenDays ? 'ملاحظة: البيانات المتوفر�
 اجعل الأسلوب مباشراً ومحفزاً ومنظماً بنقاط واضحة.`;
 
   try {
-    const ai = getAI(app);
-    const model = getGenerativeModel(ai, { model: 'gemini-2.5-flash' });
-    const response = await model.generateContent(prompt);
-    const text = response.response.text();
+    const aiCall = async () => {
+      const ai = getAI(app);
+      const model = getGenerativeModel(ai, { model: 'gemini-2.5-flash' });
+      const response = await model.generateContent(prompt);
+      return response.response.text();
+    };
+
+    const timeout = new Promise<string>((_, reject) => 
+      setTimeout(() => reject(new Error('Firebase AI call timeout')), 8000)
+    );
+
+    const text = await Promise.race([aiCall(), timeout]);
     if (text && text.trim().length > 0) {
       return text;
     }
     throw new Error('رد الذكاء الاصطناعي فارغ.');
   } catch (err: any) {
-    console.warn('Firebase AI GenerativeModel error, generating intelligent local business report:', err);
+    console.warn('Firebase AI GenerativeModel unavailable or timed out, generating intelligent business report:', err);
     // Return structured intelligent analysis directly computed from the metrics
     return generateLocalFallbackReport(summary);
   }
