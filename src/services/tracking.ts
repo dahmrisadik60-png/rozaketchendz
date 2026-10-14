@@ -91,13 +91,25 @@ export function getTrafficSource(): string {
   }
 }
 
+const SEEN_KEY = 'roza_dz_seen_events';
+function alreadySeen(key: string): boolean {
+  try {
+    const seen: string[] = JSON.parse(sessionStorage.getItem(SEEN_KEY) || '[]');
+    if (seen.includes(key)) return true;
+    seen.push(key);
+    sessionStorage.setItem(SEEN_KEY, JSON.stringify(seen.slice(-200)));
+  } catch {}
+  return false;
+}
+
 /**
  * Logs an event to the Firestore 'events' collection
- * Strictly non-blocking for visitor reliability
+ * Allowed types: product_view (productId), search (query), add_to_cart (productId), order_placed (orderId, total)
+ * Strictly non-blocking for visitor reliability; never stores customer personal info.
  */
-export async function logStoreEvent(
+export async function trackEvent(
   type: TrackingEventType,
-  payload: {
+  data: {
     productId?: string;
     query?: string;
     orderId?: string;
@@ -105,34 +117,44 @@ export async function logStoreEvent(
     source?: string;
   } = {}
 ): Promise<void> {
+  if (
+    (type === 'product_view' || type === 'search') &&
+    alreadySeen(`${type}:${data.productId || data.query || ''}`)
+  ) {
+    return;
+  }
+
   try {
-    const source = payload.source || getTrafficSource() || 'direct';
+    const rawSource = data.source || getTrafficSource() || 'direct';
+    const cleanSource = String(rawSource).trim().toLowerCase().slice(0, 100);
     const eventDocRef = doc(collection(db, 'events'));
     const docData: Record<string, any> = {
       type,
-      source: source.slice(0, 64),
+      source: cleanSource,
       createdAt: new Date().toISOString()
     };
 
-    if (payload.productId) {
-      docData.productId = String(payload.productId).slice(0, 128);
+    if (data.productId) {
+      docData.productId = String(data.productId).trim().slice(0, 100);
     }
-    if (payload.query) {
-      docData.query = String(payload.query).trim().slice(0, 128);
+    if (data.query) {
+      docData.query = String(data.query).trim().slice(0, 100);
     }
-    if (payload.orderId) {
-      docData.orderId = String(payload.orderId).slice(0, 128);
+    if (data.orderId) {
+      docData.orderId = String(data.orderId).trim().slice(0, 100);
     }
-    if (payload.total !== undefined && payload.total !== null) {
-      docData.total = Number(payload.total) || 0;
+    if (data.total !== undefined && data.total !== null) {
+      docData.total = Number(data.total) || 0;
     }
 
     await setDoc(eventDocRef, docData);
   } catch (err) {
-    // Non-fatal for users
-    console.warn('Store event logging error:', err);
+    // Non-fatal, wrap in try/catch so tracking never breaks the site
+    console.warn('trackEvent error:', err);
   }
 }
+
+export const logStoreEvent = trackEvent;
 
 export const DEFAULT_PIXEL_CONFIG: PixelConfig = {
   metaPixelId: '',

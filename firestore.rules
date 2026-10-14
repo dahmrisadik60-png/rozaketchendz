@@ -57,13 +57,13 @@ service cloud.firestore {
       return data.keys().hasAll(['type', 'source', 'createdAt']) &&
         data.keys().hasOnly(['id', 'type', 'source', 'createdAt', 'productId', 'query', 'orderId', 'total']) &&
         data.type in ['product_view', 'search', 'add_to_cart', 'order_placed'] &&
-        data.source is string && data.source.size() > 0 && data.source.size() <= 64 &&
-        data.createdAt is string && data.createdAt.size() > 0 && data.createdAt.size() <= 64 &&
-        (!('id' in data) || (data.id is string && data.id.size() <= 128)) &&
-        (!('productId' in data) || (data.productId is string && data.productId.size() <= 128)) &&
-        (!('query' in data) || (data.query is string && data.query.size() <= 128)) &&
-        (!('orderId' in data) || (data.orderId is string && data.orderId.size() <= 128)) &&
-        (!('total' in data) || (data.total is number));
+        data.source is string && data.source.size() > 0 && data.source.size() <= 100 &&
+        data.createdAt is string && data.createdAt.size() > 0 && data.createdAt.size() <= 100 &&
+        (!('id' in data) || (data.id is string && data.id.size() <= 100)) &&
+        (!('productId' in data) || (data.productId is string && data.productId.size() <= 100)) &&
+        (!('query' in data) || (data.query is string && data.query.size() <= 100)) &&
+        (!('orderId' in data) || (data.orderId is string && data.orderId.size() <= 100)) &&
+        (!('total' in data) || (data.total is number && data.total >= 0 && data.total <= 10000000));
     }
 
     function isValidAdSpend(data) {
@@ -117,11 +117,11 @@ service cloud.firestore {
 
     // 5) Events collection:
     // Anyone can create events with strict validation.
-    // Only authorized admin can read, list, update, and delete events.
+    // Only authorized admin can read or list events. No update or delete allowed.
     match /events/{eventId} {
       allow create: if isValidId(eventId) && isValidEvent(request.resource.data);
       allow get, list: if isAuthorizedAdmin();
-      allow update, delete: if isAuthorizedAdmin();
+      allow update, delete: if false;
     }
 
     // 6) Ad Spend collection:

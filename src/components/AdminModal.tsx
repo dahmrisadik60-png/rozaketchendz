@@ -7,7 +7,9 @@ import {
   PixelEventLog, 
   CustomerReview,
   ProductCategory,
-  StoreBanner
+  StoreBanner,
+  TrackingEventDoc,
+  AdSpend
 } from '../types';
 import { 
   updateOrderStatus, 
@@ -47,8 +49,11 @@ import {
   saveBannerToFirestore,
   subscribeToProducts,
   subscribeToCategories,
-  subscribeToBanner
+  subscribeToBanner,
+  subscribeToEvents,
+  subscribeToAdSpend
 } from '../services/firebase';
+import { AiInsightsTab } from './AiInsightsTab';
 import { DEFAULT_BANNER } from '../data/categories';
 import { compressImage } from '../utils/imageCompressor';
 import { 
@@ -114,7 +119,11 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     setLocalReviews(reviews);
   }, [reviews]);
 
-  const [activeTab, setActiveTab] = useState<'orders' | 'products' | 'categories' | 'banner' | 'product' | 'reviews' | 'pixels'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'products' | 'categories' | 'banner' | 'product' | 'reviews' | 'pixels' | 'analytics'>('orders');
+
+  // Analytics & Ad Spend states
+  const [eventsList, setEventsList] = useState<TrackingEventDoc[]>([]);
+  const [adSpendList, setAdSpendList] = useState<AdSpend[]>([]);
 
   // Multi-products catalog management states
   const [localProductsList, setLocalProductsList] = useState<BeautyProduct[]>(products);
@@ -198,7 +207,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   // Real-time Firestore sync when authenticated with authorized Google account
   useEffect(() => {
     if (isOpen && isAuthenticated && isGoogleAdmin) {
-      const unsub = subscribeToOrders(
+      const unsubOrders = subscribeToOrders(
         (ordersFromDb) => {
           setLocalOrders(ordersFromDb);
           onOrdersUpdated(ordersFromDb);
@@ -207,7 +216,30 @@ export const AdminModal: React.FC<AdminModalProps> = ({
           console.error('Firestore subscription error:', err);
         }
       );
-      return () => unsub();
+
+      const unsubEvents = subscribeToEvents(
+        (eventsFromDb) => {
+          setEventsList(eventsFromDb);
+        },
+        (err) => {
+          console.error('Firestore events subscription error:', err);
+        }
+      );
+
+      const unsubSpends = subscribeToAdSpend(
+        (spendsFromDb) => {
+          setAdSpendList(spendsFromDb);
+        },
+        (err) => {
+          console.error('Firestore adSpend subscription error:', err);
+        }
+      );
+
+      return () => {
+        unsubOrders();
+        unsubEvents();
+        unsubSpends();
+      };
     }
   }, [isOpen, isAuthenticated, isGoogleAdmin]);
 
@@ -939,6 +971,21 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                 <Activity className="w-4 h-4" />
                 <span>الـ Pixels والتتبع</span>
               </button>
+
+              {/* Analytics & AI Insights tab - Visible only to logged-in admins */}
+              {(isGoogleAdmin || isAuthenticated) && (
+                <button
+                  onClick={() => setActiveTab('analytics')}
+                  className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                    activeTab === 'analytics'
+                      ? 'border-[#d94f86] text-[#d94f86] bg-white rounded-t-xl shadow-xs'
+                      : 'border-transparent text-[#8a6b7a] hover:text-[#4a2b3d]'
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4 text-[#d94f86]" />
+                  <span>التحليلات (Analytics)</span>
+                </button>
+              )}
             </div>
 
             {/* Tab Contents */}
@@ -2890,6 +2937,18 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                     </div>
                   </div>
                 </div>
+              )}
+
+              {/* Analytics & AI Insights Tab Content */}
+              {activeTab === 'analytics' && (
+                <AiInsightsTab
+                  orders={localOrders}
+                  products={localProductsList}
+                  events={eventsList}
+                  adSpends={adSpendList}
+                  isGoogleAdmin={isGoogleAdmin}
+                  onNotice={showNotice}
+                />
               )}
 
             </div>

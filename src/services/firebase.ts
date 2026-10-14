@@ -19,6 +19,7 @@ import {
   onSnapshot, 
   getDocFromServer,
   query,
+  limit,
   writeBatch
 } from 'firebase/firestore';
 import {
@@ -745,7 +746,7 @@ export function subscribeToOrders(
   onError?: (error: unknown) => void
 ): () => void {
   const collectionPath = 'orders';
-  const ordersQuery = query(collection(db, collectionPath));
+  const ordersQuery = query(collection(db, collectionPath), limit(1000));
 
   return onSnapshot(
     ordersQuery,
@@ -844,8 +845,9 @@ export function subscribeToEvents(
   onError?: (error: unknown) => void
 ): () => void {
   const collectionRef = collection(db, 'events');
+  const eventsQuery = query(collectionRef, limit(1000));
   return onSnapshot(
-    collectionRef,
+    eventsQuery,
     (snapshot) => {
       const events: TrackingEventDoc[] = [];
       snapshot.forEach((d) => {
