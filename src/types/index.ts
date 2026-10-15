@@ -17,6 +17,7 @@ export interface CustomerReview {
   date: string;
   comment: string;
   verified: boolean;
+  productId?: string;
 }
 
 export interface ProductCategory {
@@ -25,6 +26,8 @@ export interface ProductCategory {
   slug: string;
   description?: string;
   icon?: string;
+  imageUrl?: string;
+  itemCount?: number;
   order?: number;
 }
 

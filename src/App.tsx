@@ -12,7 +12,11 @@ import {
   getStoredOrders, 
   saveStoredProduct, 
   getStoredReviews, 
-  saveStoredReviews 
+  saveStoredReviews,
+  getStoredCatalogProducts,
+  saveStoredCatalogProducts,
+  getStoredCategories,
+  saveStoredCategories
 } from './services/storage';
 import { TrackingService, initPixels, setRuntimePixelConfig, initTrafficSource } from './services/tracking';
 import { 
@@ -22,6 +26,7 @@ import {
   subscribeToProducts,
   subscribeToCategories,
   subscribeToBanner,
+  saveReviewsToFirestore,
   runStorefrontMigration
 } from './services/firebase';
 import { CartProvider } from './context/CartProvider';
@@ -43,8 +48,13 @@ import { ROZA_BEAUTY_PRODUCT } from './data/products';
 
 export default function App() {
   const [product, setProduct] = useState<BeautyProduct | null>(null);
-  const [productsList, setProductsList] = useState<BeautyProduct[]>([]);
-  const [categories, setCategories] = useState<ProductCategory[]>(DEFAULT_CATEGORIES);
+  const [productsList, setProductsList] = useState<BeautyProduct[]>(() => {
+    return getStoredCatalogProducts();
+  });
+  const [categories, setCategories] = useState<ProductCategory[]>(() => {
+    const stored = getStoredCategories();
+    return stored.length > 0 ? stored : DEFAULT_CATEGORIES;
+  });
   const [banner, setBanner] = useState<StoreBanner>(DEFAULT_BANNER);
   const [orders, setOrders] = useState<Order[]>([]);
   const [reviews, setReviews] = useState<CustomerReview[]>([]);
@@ -84,9 +94,13 @@ export default function App() {
     setOrders(loadedOrders);
     setReviews(loadedReviews);
 
-    // Initial products fallback with loaded product
-    if (loadedProduct) {
+    // Initial products fallback: keep stored catalog products if any exist
+    const storedCatalog = getStoredCatalogProducts();
+    if (storedCatalog && storedCatalog.length > 0) {
+      setProductsList(storedCatalog);
+    } else if (loadedProduct) {
       setProductsList([loadedProduct]);
+      saveStoredCatalogProducts([loadedProduct]);
     }
 
     // 2. Initialize Traffic Source (UTM) & Pixels
@@ -106,12 +120,14 @@ export default function App() {
     const unsubProducts = subscribeToProducts((allProds) => {
       if (allProds.length > 0) {
         setProductsList(allProds);
+        saveStoredCatalogProducts(allProds);
       }
     });
 
     const unsubCategories = subscribeToCategories((allCats) => {
       if (allCats.length > 0) {
         setCategories(allCats);
+        saveStoredCategories(allCats);
       }
     });
 
@@ -158,6 +174,25 @@ export default function App() {
     saveStoredReviews(updated);
   };
 
+  const handleAddReview = (newReview: CustomerReview) => {
+    const updated = [newReview, ...reviews];
+    setReviews(updated);
+    saveStoredReviews(updated);
+    saveReviewsToFirestore(updated).catch((err) => {
+      console.warn('Reviews cloud sync notice:', err);
+    });
+  };
+
+  const handleCatalogUpdated = (updated: BeautyProduct[]) => {
+    setProductsList(updated);
+    saveStoredCatalogProducts(updated);
+  };
+
+  const handleCategoriesUpdated = (updated: ProductCategory[]) => {
+    setCategories(updated);
+    saveStoredCategories(updated);
+  };
+
   const activeProduct = product || ROZA_BEAUTY_PRODUCT;
   const currentCatalog = productsList.length > 0 ? productsList : [activeProduct];
 
@@ -198,6 +233,7 @@ export default function App() {
                     products={currentCatalog}
                     reviews={reviews}
                     onOpenOrderModal={handleOpenDirectOrder}
+                    onAddReview={handleAddReview}
                   />
                 }
               />
@@ -267,7 +303,9 @@ export default function App() {
             reviews={reviews}
             onReviewsUpdated={handleReviewsUpdated}
             products={currentCatalog}
+            onProductsUpdated={handleCatalogUpdated}
             categories={categories}
+            onCategoriesUpdated={handleCategoriesUpdated}
             banner={banner}
           />
 

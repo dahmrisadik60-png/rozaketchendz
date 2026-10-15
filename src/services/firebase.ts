@@ -126,17 +126,25 @@ testConnection();
 // FIREBASE STORAGE: Upload images and return download URLs
 // -------------------------------------------------------------
 export async function uploadImageToStorage(file: File): Promise<string> {
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('Firebase Storage upload timed out after 3.5s')), 3500)
+  );
+
   try {
     const fileExt = file.name.split('.').pop() || 'webp';
     const cleanName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
     const storageRef = ref(storage, `products/${cleanName}`);
-    const snapshot = await uploadBytes(storageRef, file, {
-      contentType: file.type || 'image/webp'
-    });
-    const downloadUrl = await getDownloadURL(snapshot.ref);
-    return downloadUrl;
+
+    const uploadTask = async () => {
+      const snapshot = await uploadBytes(storageRef, file, {
+        contentType: file.type || 'image/webp'
+      });
+      return await getDownloadURL(snapshot.ref);
+    };
+
+    return await Promise.race([uploadTask(), timeoutPromise]);
   } catch (error) {
-    console.error('Firebase Storage upload failed:', error);
+    console.warn('Firebase Storage upload failed or timed out:', error);
     throw error;
   }
 }

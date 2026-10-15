@@ -14,12 +14,14 @@ interface ProductPageProps {
   products: BeautyProduct[];
   reviews: CustomerReview[];
   onOpenOrderModal: (product: BeautyProduct) => void;
+  onAddReview?: (review: CustomerReview) => void;
 }
 
 export const ProductPage: React.FC<ProductPageProps> = ({
   products,
   reviews,
-  onOpenOrderModal
+  onOpenOrderModal,
+  onAddReview
 }) => {
   const { id } = useParams<{ id: string }>();
   const { addToCart } = useCart();
@@ -102,9 +104,13 @@ export const ProductPage: React.FC<ProductPageProps> = ({
         </div>
       </div>
 
-      {/* Customer Reviews Section */}
+      {/* Customer Reviews Section with Interactive Submission */}
       <div className="w-full pt-8 border-t border-[#f7dfe8]">
-        <CustomerReviews reviews={reviews} />
+        <CustomerReviews 
+          reviews={reviews} 
+          productId={product.id}
+          onAddReview={onAddReview}
+        />
       </div>
 
       {/* Similar Products Section */}

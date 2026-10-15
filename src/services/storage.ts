@@ -1,10 +1,12 @@
-import { Order, BeautyProduct, OrderStatus, CustomerReview } from '../types';
+import { Order, BeautyProduct, OrderStatus, CustomerReview, ProductCategory } from '../types';
 import { ROZA_BEAUTY_PRODUCT } from '../data/products';
 import { ALGERIAN_CUSTOMER_REVIEWS } from '../data/reviews';
 
 export const STORAGE_ORDERS_KEY = 'roza_orders';
 export const STORAGE_INITIALIZED_KEY = 'roza_orders_initialized';
 export const STORAGE_PRODUCT_KEY = 'roza_beauty_product';
+export const STORAGE_CATALOG_KEY = 'roza_catalog_products';
+export const STORAGE_CATEGORIES_KEY = 'roza_categories';
 export const STORAGE_REVIEWS_KEY = 'roza_reviews';
 
 const INITIAL_SAMPLE_ORDERS: Order[] = [
@@ -340,4 +342,59 @@ export function exportOrdersToCSV(orders: Order[]): void {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+export function getStoredCatalogProducts(): BeautyProduct[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_CATALOG_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.error('Failed to load catalog products from storage:', e);
+  }
+  return [];
+}
+
+export function saveStoredCatalogProducts(products: BeautyProduct[]): void {
+  try {
+    localStorage.setItem(STORAGE_CATALOG_KEY, JSON.stringify(products));
+  } catch (e) {
+    console.warn('LocalStorage full, trimming image payloads for local cache:', e);
+    try {
+      const lightweight = products.map(p => ({
+        ...p,
+        images: p.images.slice(0, 2)
+      }));
+      localStorage.setItem(STORAGE_CATALOG_KEY, JSON.stringify(lightweight));
+    } catch {
+      // Ignore if still too large
+    }
+  }
+}
+
+export function getStoredCategories(): ProductCategory[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_CATEGORIES_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.error('Failed to load categories from storage:', e);
+  }
+  return [];
+}
+
+export function saveStoredCategories(categories: ProductCategory[]): void {
+  try {
+    localStorage.setItem(STORAGE_CATEGORIES_KEY, JSON.stringify(categories));
+  } catch (e) {
+    console.error('Failed to save categories to storage:', e);
+  }
 }

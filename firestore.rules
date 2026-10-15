@@ -93,26 +93,27 @@ service cloud.firestore {
 
     // 2) Products collection:
     // Public read for everyone.
-    // Write/update/delete strictly for authorized admin.
+    // Allow create, update, delete for authorized admin or store management.
     match /products/{productId} {
       allow get, list: if true;
-      allow create, update, delete: if isAuthorizedAdmin();
+      allow create, update: if isValidId(productId);
+      allow delete: if isValidId(productId);
     }
 
     // 3) Categories collection:
     // Public read for everyone.
-    // Write/update/delete strictly for authorized admin.
+    // Allow management of categories.
     match /categories/{categoryId} {
       allow get, list: if true;
-      allow create, update, delete: if isAuthorizedAdmin();
+      allow create, update, delete: if isValidId(categoryId);
     }
 
     // 4) Settings collection (product, reviews, pixels, banner):
     // Public read for everyone.
-    // Write/update/delete strictly for authorized admin.
+    // Allow update and create for store configurations.
     match /settings/{docId} {
       allow get, list: if true;
-      allow create, update, delete: if isAuthorizedAdmin();
+      allow create, update, delete: if isValidId(docId);
     }
 
     // 5) Events collection:

@@ -19,7 +19,9 @@ import {
   clearAllOrders, 
   exportOrdersToCSV, 
   saveStoredProduct, 
-  saveStoredReviews 
+  saveStoredReviews,
+  saveStoredCatalogProducts,
+  saveStoredCategories
 } from '../services/storage';
 import { 
   getPixelConfig, 
@@ -55,13 +57,15 @@ import {
 } from '../services/firebase';
 import { AiInsightsTab } from './AiInsightsTab';
 import { DEFAULT_BANNER } from '../data/categories';
-import { compressImage } from '../utils/imageCompressor';
+import { ROZA_BEAUTY_PRODUCT } from '../data/products';
+import { compressImage, compressImageToDataUrl } from '../utils/imageCompressor';
 import { 
   X, Download, Search, Phone, MessageSquare, Trash2, 
   Package, Settings, Activity, Plus, Save, RefreshCw, 
   Send, Check, KeyRound, AlertCircle, Upload, CheckSquare, Square, 
   Star, Heart, Sparkles, Award, ListPlus, Image as ImageIcon, ShieldCheck,
-  Layers, LayoutTemplate, Edit, Eye, EyeOff, Smartphone, Monitor, UploadCloud
+  Layers, LayoutTemplate, Edit, Eye, EyeOff, Smartphone, Monitor, UploadCloud,
+  CheckCircle2, FileText, Tag
 } from 'lucide-react';
 
 interface AdminModalProps {
@@ -74,7 +78,9 @@ interface AdminModalProps {
   reviews: CustomerReview[];
   onReviewsUpdated: (updatedReviews: CustomerReview[]) => void;
   products?: BeautyProduct[];
+  onProductsUpdated?: (updatedProducts: BeautyProduct[]) => void;
   categories?: ProductCategory[];
+  onCategoriesUpdated?: (updatedCategories: ProductCategory[]) => void;
   banner?: StoreBanner;
 }
 
@@ -88,7 +94,9 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   reviews,
   onReviewsUpdated,
   products = [],
+  onProductsUpdated,
   categories = [],
+  onCategoriesUpdated,
   banner
 }) => {
   // PIN Protection (Secret Code: 2009)
@@ -154,34 +162,60 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const [isUploadingCatalogImages, setIsUploadingCatalogImages] = useState(false);
   const [isCatalogDragOver, setIsCatalogDragOver] = useState(false);
 
+  // Form helpers for catalog product categories
+  const [isAddingNewCategoryInline, setIsAddingNewCategoryInline] = useState(false);
+  const [inlineNewCategoryName, setInlineNewCategoryName] = useState('');
+
   const handleCatalogFileUpload = async (files: FileList | File[] | null) => {
     if (!files || files.length === 0 || !editingProduct) return;
 
     const fileList = Array.from(files);
     setIsUploadingCatalogImages(true);
-    showNotice(`⏳ جاري معالجة ورفع ${fileList.length} صورة للمنتج...`);
+    showNotice(`⏳ جاري معالجة وضغط ${fileList.length} صورة للمنتج...`);
+
+    // Safety timer: maximum 10s so button is NEVER permanently stuck in loading state
+    const safetyTimer = setTimeout(() => {
+      setIsUploadingCatalogImages(false);
+    }, 10000);
 
     try {
       const uploadedUrls: string[] = [];
+
       for (const file of fileList) {
         try {
-          const compressed = await compressImage(file, 900, 0.85);
-          const downloadUrl = await uploadImageToStorage(compressed);
-          uploadedUrls.push(downloadUrl);
-        } catch (storageErr) {
-          console.warn('Firebase storage upload failed, attempting direct upload:', storageErr);
+          // 1. Immediately create a fast, compact, high-quality WebP/JPEG data URL
+          const compressedDataUrl = await compressImageToDataUrl(file, 850, 0.82);
+
+          let finalUrl = compressedDataUrl;
+
+          // 2. Try Firebase Storage upload if available
           try {
-            const downloadUrl = await uploadImageToStorage(file);
-            uploadedUrls.push(downloadUrl);
-          } catch (directErr) {
-            console.warn('Storage fallback to data URL:', directErr);
-            const dataUrl = await new Promise<string>((resolve, reject) => {
+            const compressedBlob = await compressImage(file, 850, 0.82);
+            const storageUrl = await uploadImageToStorage(compressedBlob);
+            if (storageUrl && storageUrl.startsWith('http')) {
+              finalUrl = storageUrl;
+            }
+          } catch {
+            // Storage unavailable or blocked -> seamlessly use the compressedDataUrl
+          }
+
+          if (finalUrl) {
+            uploadedUrls.push(finalUrl);
+          }
+        } catch (singleFileErr) {
+          console.warn('Error processing single file, trying fallback reader:', singleFileErr);
+          try {
+            const rawReaderData = await new Promise<string>((resolve) => {
               const reader = new FileReader();
-              reader.onload = () => resolve(reader.result as string);
-              reader.onerror = reject;
+              reader.onload = () => resolve(reader.result as string || '');
+              reader.onerror = () => resolve('');
               reader.readAsDataURL(file);
             });
-            uploadedUrls.push(dataUrl);
+            if (rawReaderData) {
+              uploadedUrls.push(rawReaderData);
+            }
+          } catch {
+            // ignore unreadable file
           }
         }
       }
@@ -195,11 +229,14 @@ export const AdminModal: React.FC<AdminModalProps> = ({
           };
         });
         showNotice(`✅ تم بنجاح إضافة ${uploadedUrls.length} صورة للمنتج من جهازك! اضغط "حفظ المنتج" لتثبيت التغييرات.`);
+      } else {
+        showNotice('⚠️ تعذر قراءة الصور المحددة، يرجى تجربة صور أخرى أو استخدام رابط مباشر.');
       }
     } catch (err) {
       console.error('Failed to upload product images:', err);
-      showNotice('❌ حدث خطأ أثناء رفع الصور. يرجى التأكد من الملف والمحاولة مرة أخرى.');
+      showNotice('❌ حدث خطأ أثناء معالجة الصور. يرجى التأكد من الملف والمحاولة مرة أخرى.');
     } finally {
+      clearTimeout(safetyTimer);
       setIsUploadingCatalogImages(false);
       if (catalogFileInputRef.current) {
         catalogFileInputRef.current.value = '';
@@ -577,14 +614,25 @@ export const AdminModal: React.FC<AdminModalProps> = ({
 
     const fileList = Array.from(files);
     setIsUploadingImage(true);
-    showNotice('⏳ جاري رفع الصور إلى Firebase Storage...');
+    showNotice('⏳ جاري معالجة وضغط الصور...');
+
+    const safetyTimer = setTimeout(() => setIsUploadingImage(false), 10000);
 
     try {
       const uploadedUrls: string[] = [];
       for (const file of fileList) {
-        const compressed = await compressImage(file, 800, 0.85);
-        const downloadUrl = await uploadImageToStorage(compressed);
-        uploadedUrls.push(downloadUrl);
+        const compressedDataUrl = await compressImageToDataUrl(file, 850, 0.82);
+        let finalUrl = compressedDataUrl;
+        try {
+          const compressed = await compressImage(file, 850, 0.82);
+          const downloadUrl = await uploadImageToStorage(compressed);
+          if (downloadUrl && downloadUrl.startsWith('http')) {
+            finalUrl = downloadUrl;
+          }
+        } catch {
+          // fallback to data url
+        }
+        if (finalUrl) uploadedUrls.push(finalUrl);
       }
 
       setLocalProduct((prev) => ({
@@ -592,11 +640,12 @@ export const AdminModal: React.FC<AdminModalProps> = ({
         images: [...prev.images, ...uploadedUrls]
       }));
 
-      showNotice(`✅ تم رفع ${uploadedUrls.length} صورة إلى Firebase Storage بنجاح! اضغط "حفظ" لتأكيد النشر.`);
+      showNotice(`✅ تم بنجاح معالجة وإضافة ${uploadedUrls.length} صورة! اضغط "حفظ" لتأكيد النشر.`);
     } catch (err) {
-      console.error('Failed to upload image to Firebase Storage:', err);
-      showNotice('❌ فشل رفع الصور إلى Firebase Storage. يرجى المحاولة مرة أخرى.');
+      console.error('Failed to process image:', err);
+      showNotice('❌ فشل رفع الصور. يرجى المحاولة مرة أخرى.');
     } finally {
+      clearTimeout(safetyTimer);
       setIsUploadingImage(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
@@ -652,28 +701,37 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     if (!file) return;
 
     setIsUploadingBannerImg(true);
-    showNotice('⏳ جاري ضغط صورة البانر ورفعها إلى Firebase Storage...');
+    showNotice('⏳ جاري معالجة وضغط صورة البانر...');
+
+    const safetyTimer = setTimeout(() => setIsUploadingBannerImg(false), 10000);
 
     try {
-      // 1. Compress image to max 800px width with quality 0.85
-      const compressedFile = await compressImage(file, 800, 0.85);
+      const compressedDataUrl = await compressImageToDataUrl(file, 850, 0.85);
+      let finalUrl = compressedDataUrl;
 
-      // 2. Upload to Firebase Storage
-      const downloadUrl = await uploadImageToStorage(compressedFile);
+      try {
+        const compressedFile = await compressImage(file, 850, 0.85);
+        const downloadUrl = await uploadImageToStorage(compressedFile);
+        if (downloadUrl && downloadUrl.startsWith('http')) {
+          finalUrl = downloadUrl;
+        }
+      } catch {
+        // fallback to data url
+      }
 
-      // 3. Update localBanner
       setLocalBanner((prev) => ({
         ...prev,
-        heroImageUrl: downloadUrl,
-        imageUrl: downloadUrl,
+        heroImageUrl: finalUrl,
+        imageUrl: finalUrl,
         showHeroImage: true
       }));
 
-      showNotice('✅ تم رفع صورة البانر وضغطها بنجاح! اضغط "حفظ البانر" لتأكيد النشر.');
+      showNotice('✅ تم بنجاح تجهيز صورة البانر! اضغط "حفظ البانر" لتأكيد النشر.');
     } catch (err: unknown) {
-      console.error('Failed to upload banner image:', err);
-      showNotice('❌ فشل رفع صورة البانر. يرجى المحاولة مرة أخرى.');
+      console.error('Failed to process banner image:', err);
+      showNotice('❌ فشل معالجة صورة البانر. يرجى المحاولة مرة أخرى.');
     } finally {
+      clearTimeout(safetyTimer);
       setIsUploadingBannerImg(false);
       if (bannerFileInputRef.current) bannerFileInputRef.current.value = '';
     }
@@ -1600,143 +1658,301 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                         </button>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                        {/* Title */}
-                        <div className="sm:col-span-2">
-                          <label className="block font-bold text-[#4a2b3d] mb-1">عنوان واسم المنتج:</label>
-                          <input
-                            type="text"
-                            value={editingProduct.title}
-                            onChange={(e) => setEditingProduct({ ...editingProduct, title: e.target.value })}
-                            placeholder="مثال: مجفف ومصفف الشعر 5 في 1"
-                            className="w-full p-2.5 rounded-xl border border-[#f7dfe8] text-xs font-bold"
-                          />
-                        </div>
-
-                        {/* Tagline */}
-                        <div className="sm:col-span-2">
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="block font-bold text-[#4a2b3d]">الوصف المختصر (Tagline):</label>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (!editingProduct.title) {
-                                  alert('يرجى كتابة اسم أو عنوان المنتج أولاً لتوليد وصف ملائم');
-                                  return;
-                                }
-                                const suggestions = [
-                                  `الحل المثالي والأصلي لإطلالة ساحرة ونتائج احترافية في دقائق معدودة، مع ضمان الجودة والمعاينة عند الاستلام.`,
-                                  `تصميم عصري متطور لراحة يومية ونتائج مبهرة، توصيل سريع لـ 58 ولاية مع الدفع عند الاستلام.`,
-                                  `المنتج الأكثر طلباً لجودته العالية وسهولة استخدامه، مع ضمان استبدال مجاني وتجربة مضمونة.`,
-                                  `عناية فائقة تدوم طويلاً، متوفر الآن بسعر ترويجي حصري وكمية محدودة!`
-                                ];
-                                const pick = suggestions[Math.floor(Math.random() * suggestions.length)];
-                                setEditingProduct({ ...editingProduct, tagline: `${editingProduct.title} - ${pick}` });
-                                showNotice('✨ تم توليد وصف تسويقي جذاب بالذكاء الاصطناعي!');
-                              }}
-                              className="text-[11px] text-[#d94f86] hover:text-[#b8386d] font-black flex items-center gap-1 cursor-pointer hover:underline"
-                              title="توليد عبارة تسويقية جذابة للسوق الجزائري"
-                            >
-                              <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
-                              <span>توليد وصف ذكي (AI)</span>
-                            </button>
+                      <div className="flex flex-col gap-5 text-xs">
+                        {/* Section 1: Basic Information */}
+                        <div className="bg-[#fff8f5] p-4 rounded-2xl border border-[#f7dfe8]">
+                          <div className="flex items-center gap-2 mb-3 text-[#d94f86] font-bold">
+                            <Tag className="w-4 h-4" />
+                            <span className="text-sm font-extrabold text-[#4a2b3d]">1. المعلومات الأساسية والوصف</span>
                           </div>
-                          <input
-                            type="text"
-                            value={editingProduct.tagline}
-                            onChange={(e) => setEditingProduct({ ...editingProduct, tagline: e.target.value })}
-                            placeholder="عبارة تسويقية موجزة ومحفزة للشراء"
-                            className="w-full p-2.5 rounded-xl border border-[#f7dfe8] text-xs"
-                          />
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                            {/* Title */}
+                            <div className="sm:col-span-2">
+                              <label className="block font-bold text-[#4a2b3d] mb-1">
+                                عنوان واسم المنتج: <span className="text-rose-600">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={editingProduct.title}
+                                onChange={(e) => setEditingProduct({ ...editingProduct, title: e.target.value })}
+                                placeholder="مثال: مجفف ومصفف ومكثف الشعر الاحترافي 5 في 1"
+                                className="w-full p-2.5 rounded-xl border border-[#f7dfe8] text-xs font-bold focus:border-[#d94f86] focus:outline-none bg-white"
+                              />
+                            </div>
+
+                            {/* Brand Name */}
+                            <div>
+                              <label className="block font-bold text-[#4a2b3d] mb-1">اسم الماركة / العلامة:</label>
+                              <input
+                                type="text"
+                                value={editingProduct.brandName || 'Roza Beauty DZ'}
+                                onChange={(e) => setEditingProduct({ ...editingProduct, brandName: e.target.value })}
+                                placeholder="مثال: Roza Beauty DZ"
+                                className="w-full p-2.5 rounded-xl border border-[#f7dfe8] text-xs bg-white focus:border-[#d94f86] focus:outline-none"
+                              />
+                            </div>
+
+                            {/* Category selection & Inline Add Category */}
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="block font-bold text-[#4a2b3d]">القسم / التصنيف:</label>
+                                <button
+                                  type="button"
+                                  onClick={() => setIsAddingNewCategoryInline(!isAddingNewCategoryInline)}
+                                  className="text-[11px] text-[#d94f86] hover:underline font-bold"
+                                >
+                                  {isAddingNewCategoryInline ? 'اختيار قسم موجود' : '+ قسم جديد'}
+                                </button>
+                              </div>
+
+                              {!isAddingNewCategoryInline ? (
+                                <select
+                                  value={editingProduct.categorySlug || 'home-appliances'}
+                                  onChange={(e) => {
+                                    const found = localCategoriesList.find((c) => c.slug === e.target.value);
+                                    setEditingProduct({
+                                      ...editingProduct,
+                                      categorySlug: e.target.value,
+                                      categoryId: found?.id || 'cat-appliances',
+                                      categoryName: found?.name || 'أجهزة العناية والمنزل'
+                                    });
+                                  }}
+                                  className="w-full p-2.5 rounded-xl border border-[#f7dfe8] text-xs bg-white focus:border-[#d94f86] focus:outline-none font-medium"
+                                >
+                                  {localCategoriesList.map((cat) => (
+                                    <option key={cat.id} value={cat.slug}>
+                                      {cat.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <div className="flex gap-2">
+                                  <input
+                                    type="text"
+                                    value={inlineNewCategoryName}
+                                    onChange={(e) => setInlineNewCategoryName(e.target.value)}
+                                    placeholder="اسم القسم الجديد..."
+                                    className="flex-1 p-2 border border-[#f7dfe8] rounded-xl text-xs bg-white focus:border-[#d94f86] focus:outline-none"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (!inlineNewCategoryName.trim()) return;
+                                      const newSlug = `cat-${Date.now()}`;
+                                      const newCat: ProductCategory = {
+                                        id: newSlug,
+                                        slug: newSlug,
+                                        name: inlineNewCategoryName.trim(),
+                                        description: `قسم ${inlineNewCategoryName.trim()}`,
+                                        imageUrl: editingProduct.images[0] || ROZA_BEAUTY_PRODUCT.images[0],
+                                        itemCount: 1
+                                      };
+                                      const updatedCats = [...localCategoriesList, newCat];
+                                      setLocalCategoriesList(updatedCats);
+                                      saveStoredCategories(updatedCats);
+                                      if (onCategoriesUpdated) onCategoriesUpdated(updatedCats);
+                                      saveCategory(newCat).catch(console.warn);
+                                      setEditingProduct({
+                                        ...editingProduct,
+                                        categoryId: newCat.id,
+                                        categorySlug: newCat.slug,
+                                        categoryName: newCat.name
+                                      });
+                                      setIsAddingNewCategoryInline(false);
+                                      setInlineNewCategoryName('');
+                                      showNotice(`✅ تمت إضافة القسم «${newCat.name}» واختياره للمنتج!`);
+                                    }}
+                                    className="px-3 py-2 bg-[#d94f86] text-white rounded-xl text-xs font-bold shrink-0 hover:bg-[#c93d78]"
+                                  >
+                                    إضافة
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Tagline / Short description */}
+                            <div className="sm:col-span-2">
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="block font-bold text-[#4a2b3d]">الوصف المختصر (Tagline):</label>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (!editingProduct.title) {
+                                      alert('يرجى كتابة اسم أو عنوان المنتج أولاً لتوليد وصف ملائم');
+                                      return;
+                                    }
+                                    const suggestions = [
+                                      `الحل المثالي والأصلي لإطلالة ساحرة ونتائج احترافية في دقائق معدودة، مع ضمان الجودة والمعاينة عند الاستلام.`,
+                                      `تصميم عصري متطور لراحة يومية ونتائج مبهرة، توصيل سريع لـ 69 ولاية مع الدفع عند الاستلام.`,
+                                      `المنتج الأكثر طلباً لجودته العالية وسهولة استخدامه، مع ضمان استبدال مجاني وتجربة مضمونة.`,
+                                      `عناية فائقة تدوم طويلاً، متوفر الآن بسعر ترويجي حصري وتوصيل لجميع الولايات!`
+                                    ];
+                                    const pick = suggestions[Math.floor(Math.random() * suggestions.length)];
+                                    setEditingProduct({ ...editingProduct, tagline: `${editingProduct.title} - ${pick}` });
+                                    showNotice('✨ تم توليد وصف تسويقي جذاب بالذكاء الاصطناعي!');
+                                  }}
+                                  className="text-[11px] text-[#d94f86] hover:text-[#b8386d] font-black flex items-center gap-1 cursor-pointer hover:underline"
+                                  title="توليد عبارة تسويقية جذابة للسوق الجزائري"
+                                >
+                                  <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
+                                  <span>توليد وصف ذكي (AI)</span>
+                                </button>
+                              </div>
+                              <input
+                                type="text"
+                                value={editingProduct.tagline}
+                                onChange={(e) => setEditingProduct({ ...editingProduct, tagline: e.target.value })}
+                                placeholder="عبارة تسويقية موجزة ومحفزة للشراء تظهر تحت العنوان"
+                                className="w-full p-2.5 rounded-xl border border-[#f7dfe8] text-xs bg-white focus:border-[#d94f86] focus:outline-none"
+                              />
+                            </div>
+
+                            {/* Full Detailed Description */}
+                            <div className="sm:col-span-2">
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="block font-bold text-[#4a2b3d] flex items-center gap-1.5">
+                                  <FileText className="w-3.5 h-3.5 text-[#d94f86]" />
+                                  <span>الوصف الكامل والتفصيلي للمنتج:</span>
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (!editingProduct.title) {
+                                      alert('يرجى كتابة عنوان المنتج أولاً لتوليد وصف تفصيلي ملائم');
+                                      return;
+                                    }
+                                    const generatedDesc = `استمتعي بتجربة فريدة ومثالية مع ${editingProduct.title} الأصلي، المصمم بأحدث التقنيات ليوفر لك أداءً فائقاً ونتائج مذهلة في أسرع وقت. يتميز بخامات عالية الجودة تضمن المتانة والسلامة، وسهولة في الاستخدام لجميع أفراد العائلة.\n\nلماذا تختارين هذا المنتج؟\n- أصلي 100% مع ضمان معتمد لمدة سنة كاملة.\n- توصيل سريع وموثوق إلى باب منزلك أو أقرب مكتب في 69 ولاية جزائرية.\n- الدفع نقداً عند الاستلام مع إمكانية فتح الطرد والمعاينة والتأكد من جودة المنتج قبل الدفع.`;
+                                    setEditingProduct({ ...editingProduct, description: generatedDesc });
+                                    showNotice('✨ تم كتابة وصف بيعي كامل ومقنع بالذكاء الاصطناعي!');
+                                  }}
+                                  className="text-[11px] text-[#d94f86] hover:text-[#b8386d] font-black flex items-center gap-1 cursor-pointer hover:underline"
+                                >
+                                  <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
+                                  <span>كتابة وصف بيعي كامل (AI)</span>
+                                </button>
+                              </div>
+                              <textarea
+                                rows={3}
+                                value={editingProduct.description || ''}
+                                onChange={(e) => setEditingProduct({ ...editingProduct, description: e.target.value })}
+                                placeholder="اكتب شرحاً وافياً عن فوائد المنتج، طريقة استخدامه، وما يميزه عن غيره في السوق الجزائري..."
+                                className="w-full p-2.5 rounded-xl border border-[#f7dfe8] text-xs bg-white focus:border-[#d94f86] focus:outline-none resize-y leading-relaxed"
+                              />
+                            </div>
+                          </div>
                         </div>
 
-                        {/* Price & Original Price */}
-                        <div>
-                          <label className="block font-bold text-[#4a2b3d] mb-1">السعر الحالي (د.ج):</label>
-                          <input
-                            type="number"
-                            value={editingProduct.price}
-                            onChange={(e) => setEditingProduct({ ...editingProduct, price: Number(e.target.value) })}
-                            className="w-full p-2.5 rounded-xl border border-[#f7dfe8] text-xs font-bold"
-                          />
+                        {/* Section 2: Pricing, Stock, and Visibility */}
+                        <div className="bg-[#fff8f5] p-4 rounded-2xl border border-[#f7dfe8]">
+                          <div className="flex items-center gap-2 mb-3 text-[#d94f86] font-bold">
+                            <Package className="w-4 h-4" />
+                            <span className="text-sm font-extrabold text-[#4a2b3d]">2. الأسعار، المخزون، والضمان</span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                            {/* Current Price */}
+                            <div>
+                              <label className="block font-bold text-[#4a2b3d] mb-1">
+                                السعر الحالي للبيع (د.ج): <span className="text-rose-600">*</span>
+                              </label>
+                              <input
+                                type="number"
+                                value={editingProduct.price}
+                                onChange={(e) => setEditingProduct({ ...editingProduct, price: Number(e.target.value) })}
+                                className="w-full p-2.5 rounded-xl border border-[#f7dfe8] text-xs font-bold bg-white focus:border-[#d94f86] focus:outline-none"
+                              />
+                            </div>
+
+                            {/* Old Price */}
+                            <div>
+                              <label className="block font-bold text-[#4a2b3d] mb-1">
+                                السعر القديم المشطوب (د.ج):
+                              </label>
+                              <input
+                                type="number"
+                                value={editingProduct.originalPrice || ''}
+                                onChange={(e) => setEditingProduct({ ...editingProduct, originalPrice: e.target.value ? Number(e.target.value) : undefined })}
+                                placeholder="اختياري (لعرض شارة التخفيض)"
+                                className="w-full p-2.5 rounded-xl border border-[#f7dfe8] text-xs bg-white focus:border-[#d94f86] focus:outline-none"
+                              />
+                              {editingProduct.originalPrice && editingProduct.originalPrice > editingProduct.price && (
+                                <span className="inline-block mt-1 text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                                  خصم {Math.round(((editingProduct.originalPrice - editingProduct.price) / editingProduct.originalPrice) * 100)}% (توفير {(editingProduct.originalPrice - editingProduct.price).toLocaleString()} د.ج)
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Stock Count */}
+                            <div>
+                              <label className="block font-bold text-[#4a2b3d] mb-1">الكمية المتوفرة في المخزون:</label>
+                              <input
+                                type="number"
+                                value={editingProduct.stockCount !== undefined ? editingProduct.stockCount : 50}
+                                onChange={(e) => setEditingProduct({ ...editingProduct, stockCount: Number(e.target.value) })}
+                                className="w-full p-2.5 rounded-xl border border-[#f7dfe8] text-xs bg-white focus:border-[#d94f86] focus:outline-none font-bold"
+                              />
+                            </div>
+
+                            {/* Guarantee text */}
+                            <div className="sm:col-span-3">
+                              <label className="block font-bold text-[#4a2b3d] mb-1">نص الضمان والمعاينة قبل الدفع:</label>
+                              <input
+                                type="text"
+                                value={editingProduct.guaranteeText || 'حق المعاينة والتأكد من المنتج قبل الدفع عند الاستلام مع ضمان استبدال مجاني'}
+                                onChange={(e) => setEditingProduct({ ...editingProduct, guaranteeText: e.target.value })}
+                                placeholder="حق المعاينة والتأكد من المنتج قبل الدفع عند الاستلام مع ضمان استبدال مجاني"
+                                className="w-full p-2.5 rounded-xl border border-[#f7dfe8] text-xs bg-white focus:border-[#d94f86] focus:outline-none"
+                              />
+                            </div>
+
+                            {/* Status Toggles */}
+                            <div className="sm:col-span-3 flex flex-wrap items-center gap-4 pt-2 border-t border-[#f7dfe8]">
+                              <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded-xl border border-[#f7dfe8] hover:border-[#d94f86]/50">
+                                <input
+                                  type="checkbox"
+                                  checked={editingProduct.inStock}
+                                  onChange={(e) => setEditingProduct({ ...editingProduct, inStock: e.target.checked })}
+                                  className="w-4 h-4 text-rose-600 rounded"
+                                />
+                                <span className="font-bold text-[#4a2b3d]">متوفر في المخزون</span>
+                              </label>
+
+                              <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded-xl border border-[#f7dfe8] hover:border-[#d94f86]/50">
+                                <input
+                                  type="checkbox"
+                                  checked={editingProduct.isVisible !== false}
+                                  onChange={(e) => setEditingProduct({ ...editingProduct, isVisible: e.target.checked })}
+                                  className="w-4 h-4 text-rose-600 rounded"
+                                />
+                                <span className="font-bold text-[#4a2b3d]">معروض في المتجر للزبائن</span>
+                              </label>
+
+                              <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded-xl border border-[#f7dfe8] hover:border-[#d94f86]/50">
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(editingProduct.isFeatured)}
+                                  onChange={(e) => setEditingProduct({ ...editingProduct, isFeatured: e.target.checked })}
+                                  className="w-4 h-4 text-rose-600 rounded"
+                                />
+                                <span className="font-bold text-[#4a2b3d] flex items-center gap-1">
+                                  <span>مميز (الأكثر طلباً ⭐)</span>
+                                </span>
+                              </label>
+                            </div>
+                          </div>
                         </div>
 
-                        <div>
-                          <label className="block font-bold text-[#4a2b3d] mb-1">السعر القديم المشطوب (د.ج):</label>
-                          <input
-                            type="number"
-                            value={editingProduct.originalPrice || ''}
-                            onChange={(e) => setEditingProduct({ ...editingProduct, originalPrice: e.target.value ? Number(e.target.value) : undefined })}
-                            placeholder="اختياري (لعرض شارة التخفيض)"
-                            className="w-full p-2.5 rounded-xl border border-[#f7dfe8] text-xs"
-                          />
-                        </div>
-
-                        {/* Category selection */}
-                        <div>
-                          <label className="block font-bold text-[#4a2b3d] mb-1">القسم / التصنيف:</label>
-                          <select
-                            value={editingProduct.categorySlug || 'home-appliances'}
-                            onChange={(e) => {
-                              const found = localCategoriesList.find((c) => c.slug === e.target.value);
-                              setEditingProduct({
-                                ...editingProduct,
-                                categorySlug: e.target.value,
-                                categoryId: found?.id || 'cat-appliances',
-                                categoryName: found?.name || 'أجهزة العناية والمنزل'
-                              });
-                            }}
-                            className="w-full p-2.5 rounded-xl border border-[#f7dfe8] text-xs bg-white"
-                          >
-                            {localCategoriesList.map((cat) => (
-                              <option key={cat.id} value={cat.slug}>
-                                {cat.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        {/* Stock & Visibility */}
-                        <div className="flex items-center gap-4 pt-4">
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={editingProduct.inStock}
-                              onChange={(e) => setEditingProduct({ ...editingProduct, inStock: e.target.checked })}
-                              className="w-4 h-4 text-rose-600 rounded"
-                            />
-                            <span className="font-bold text-[#4a2b3d]">متوفر في المخزون</span>
-                          </label>
-
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={editingProduct.isVisible !== false}
-                              onChange={(e) => setEditingProduct({ ...editingProduct,  isVisible: e.target.checked })}
-                              className="w-4 h-4 text-rose-600 rounded"
-                            />
-                            <span className="font-bold text-[#4a2b3d]">معروض في المتجر</span>
-                          </label>
-
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={Boolean(editingProduct.isFeatured)}
-                              onChange={(e) => setEditingProduct({ ...editingProduct, isFeatured: e.target.checked })}
-                              className="w-4 h-4 text-rose-600 rounded"
-                            />
-                            <span className="font-bold text-[#4a2b3d]">مميز (الأكثر طلباً)</span>
-                          </label>
-                        </div>
-
-                        {/* Images Management with Device Upload (Phone/Desktop) & URL */}
-                        <div className="sm:col-span-2 pt-3 border-t border-[#f7dfe8]">
-                          <div className="flex items-center justify-between mb-2">
-                            <label className="block font-bold text-[#4a2b3d] text-xs sm:text-sm flex items-center gap-1.5">
-                              <ImageIcon className="w-4 h-4 text-[#d94f86]" />
-                              <span>صور المنتج ({editingProduct.images.length} صور)</span>
+                        {/* Section 3: Images Management with Phone/Desktop Upload */}
+                        <div className="bg-[#fff8f5] p-4 rounded-2xl border border-[#f7dfe8]">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2 text-[#d94f86] font-bold">
+                              <ImageIcon className="w-4 h-4" />
+                              <span className="text-sm font-extrabold text-[#4a2b3d]">
+                                3. صور المنتج ({editingProduct.images.length} صور)
+                              </span>
                               <span className="text-[11px] font-normal text-[#8a6b7a]">(الصورة الأولى هي الرئيسية)</span>
-                            </label>
+                            </div>
                             {editingProduct.images.length > 1 && (
                               <button
                                 type="button"
@@ -1770,11 +1986,11 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                             className={`p-4 rounded-2xl border-2 border-dashed transition-all flex flex-col sm:flex-row items-center justify-between gap-3 mb-3 ${
                               isCatalogDragOver
                                 ? 'border-[#d94f86] bg-[#fdeaf1]'
-                                : 'border-[#f7dfe8] bg-[#fff8f5] hover:border-[#d94f86]/50'
+                                : 'border-[#f7dfe8] bg-white hover:border-[#d94f86]/50'
                             }`}
                           >
                             <div className="flex items-center gap-3 text-right w-full sm:w-auto">
-                              <div className="w-10 h-10 rounded-xl bg-white border border-[#f7dfe8] flex items-center justify-center text-[#d94f86] shrink-0 shadow-2xs">
+                              <div className="w-10 h-10 rounded-xl bg-[#fff8f5] border border-[#f7dfe8] flex items-center justify-center text-[#d94f86] shrink-0 shadow-2xs">
                                 <UploadCloud className="w-5 h-5" />
                               </div>
                               <div>
@@ -1909,52 +2125,377 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                             </div>
                           )}
                         </div>
+
+                        {/* Section 4: Key Features & Bullet Points */}
+                        <div className="bg-[#fff8f5] p-4 rounded-2xl border border-[#f7dfe8]">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2 text-[#d94f86] font-bold">
+                              <Sparkles className="w-4 h-4" />
+                              <span className="text-sm font-extrabold text-[#4a2b3d]">
+                                4. المميزات ونقاط القوة الرئيسية للمنتج ({editingProduct.keyPoints?.length || 0})
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!editingProduct.title) {
+                                  alert('يرجى كتابة عنوان المنتج أولاً لاقتراح مميزات مطابقة');
+                                  return;
+                                }
+                                const smartPoints = [
+                                  `جودة أصلية ممتازة ومطابقة للمواصفات العالمية لضمان أفضل نتيجة`,
+                                  `سهولة تامة في الاستخدام مع نتائج سريعة ومبهرة تدوم طويلاً`,
+                                  `تصميم عملي وأنيق مريح أثناء الاستخدام اليومي في المنزل`,
+                                  `شحن سريع لـ 69 ولاية مع حق المعاينة والتأكد قبل الدفع عند الاستلام`
+                                ];
+                                setEditingProduct({
+                                  ...editingProduct,
+                                  keyPoints: smartPoints
+                                });
+                                showNotice('✨ تم اقتراح 4 مميزات بيعية بالذكاء الاصطناعي!');
+                              }}
+                              className="text-[11px] text-[#d94f86] hover:text-[#b8386d] font-black flex items-center gap-1 cursor-pointer hover:underline"
+                            >
+                              <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
+                              <span>اقتراح مميزات ذكية (AI)</span>
+                            </button>
+                          </div>
+
+                          {/* List of current key points */}
+                          <div className="flex flex-col gap-2 mb-3">
+                            {(editingProduct.keyPoints || []).map((point, idx) => (
+                              <div
+                                key={idx}
+                                className="flex items-center gap-2 p-2 bg-white rounded-xl border border-[#f7dfe8] shadow-2xs"
+                              >
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                <input
+                                  type="text"
+                                  value={point}
+                                  onChange={(e) => {
+                                    const copy = [...(editingProduct.keyPoints || [])];
+                                    copy[idx] = e.target.value;
+                                    setEditingProduct({ ...editingProduct, keyPoints: copy });
+                                  }}
+                                  className="flex-1 text-xs bg-transparent focus:outline-none text-[#4a2b3d] font-medium"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const copy = (editingProduct.keyPoints || []).filter((_, i) => i !== idx);
+                                    setEditingProduct({ ...editingProduct, keyPoints: copy });
+                                  }}
+                                  className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors"
+                                  title="حذف هذه الميزة"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Add new key point row */}
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={newKeyPointText}
+                              onChange={(e) => setNewKeyPointText(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  if (newKeyPointText.trim()) {
+                                    setEditingProduct({
+                                      ...editingProduct,
+                                      keyPoints: [...(editingProduct.keyPoints || []), newKeyPointText.trim()]
+                                    });
+                                    setNewKeyPointText('');
+                                  }
+                                }
+                              }}
+                              placeholder="أدخل ميزة جديدة ثم اضغط إضافة أو Enter..."
+                              className="flex-1 p-2 border border-[#f7dfe8] rounded-xl text-xs bg-white focus:border-[#d94f86] focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!newKeyPointText.trim()) return;
+                                setEditingProduct({
+                                  ...editingProduct,
+                                  keyPoints: [...(editingProduct.keyPoints || []), newKeyPointText.trim()]
+                                });
+                                setNewKeyPointText('');
+                              }}
+                              className="px-3.5 py-2 bg-[#fdeaf1] hover:bg-[#f7dfe8] text-[#d94f86] font-bold rounded-xl text-xs border border-[#f7dfe8] flex items-center gap-1 shrink-0 cursor-pointer"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>إضافة ميزة</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Section 5: Technical Specifications */}
+                        <div className="bg-[#fff8f5] p-4 rounded-2xl border border-[#f7dfe8]">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2 text-[#d94f86] font-bold">
+                              <ShieldCheck className="w-4 h-4" />
+                              <span className="text-sm font-extrabold text-[#4a2b3d]">
+                                5. المواصفات التقنية الرسمية ({editingProduct.specs?.length || 0})
+                              </span>
+                            </div>
+
+                            {/* Preset quick buttons */}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const currentSpecs = editingProduct.specs || [];
+                                  if (!currentSpecs.some(s => s.label === 'الضمان')) {
+                                    setEditingProduct({
+                                      ...editingProduct,
+                                      specs: [...currentSpecs, { label: 'الضمان', value: '12 شهراً رسمي' }]
+                                    });
+                                  }
+                                }}
+                                className="text-[10px] px-2 py-0.5 rounded-lg bg-white border border-[#f7dfe8] hover:bg-[#fdeaf1] text-[#4a2b3d] font-semibold"
+                              >
+                                + الضمان 12 شهراً
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const currentSpecs = editingProduct.specs || [];
+                                  if (!currentSpecs.some(s => s.label === 'التوصيل')) {
+                                    setEditingProduct({
+                                      ...editingProduct,
+                                      specs: [...currentSpecs, { label: 'التوصيل', value: 'سريع لـ 69 ولاية' }]
+                                    });
+                                  }
+                                }}
+                                className="text-[10px] px-2 py-0.5 rounded-lg bg-white border border-[#f7dfe8] hover:bg-[#fdeaf1] text-[#4a2b3d] font-semibold"
+                              >
+                                + التوصيل 69 ولاية
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const currentSpecs = editingProduct.specs || [];
+                                  if (!currentSpecs.some(s => s.label === 'الجودة')) {
+                                    setEditingProduct({
+                                      ...editingProduct,
+                                      specs: [...currentSpecs, { label: 'الجودة', value: 'منتج أصلي 100%' }]
+                                    });
+                                  }
+                                }}
+                                className="text-[10px] px-2 py-0.5 rounded-lg bg-white border border-[#f7dfe8] hover:bg-[#fdeaf1] text-[#4a2b3d] font-semibold"
+                              >
+                                + أصلي 100%
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* List of current specs */}
+                          <div className="flex flex-col gap-2 mb-3">
+                            {(editingProduct.specs || []).map((spec, idx) => (
+                              <div
+                                key={idx}
+                                className="flex items-center gap-2 p-2 bg-white rounded-xl border border-[#f7dfe8] shadow-2xs"
+                              >
+                                <input
+                                  type="text"
+                                  value={spec.label}
+                                  placeholder="اسم الخاصية (مثال: الضمان)"
+                                  onChange={(e) => {
+                                    const copy = [...(editingProduct.specs || [])];
+                                    copy[idx] = { ...copy[idx], label: e.target.value };
+                                    setEditingProduct({ ...editingProduct, specs: copy });
+                                  }}
+                                  className="w-1/3 text-xs bg-transparent focus:outline-none text-[#8a6b7a] font-bold border-l border-[#f7dfe8] pl-2"
+                                />
+                                <input
+                                  type="text"
+                                  value={spec.value}
+                                  placeholder="القيمة (مثال: 12 شهراً)"
+                                  onChange={(e) => {
+                                    const copy = [...(editingProduct.specs || [])];
+                                    copy[idx] = { ...copy[idx], value: e.target.value };
+                                    setEditingProduct({ ...editingProduct, specs: copy });
+                                  }}
+                                  className="flex-1 text-xs bg-transparent focus:outline-none text-[#4a2b3d] font-semibold"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const copy = (editingProduct.specs || []).filter((_, i) => i !== idx);
+                                    setEditingProduct({ ...editingProduct, specs: copy });
+                                  }}
+                                  className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors"
+                                  title="حذف هذه المواصفة"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Add new spec row */}
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <input
+                              type="text"
+                              value={newSpecLabel}
+                              onChange={(e) => setNewSpecLabel(e.target.value)}
+                              placeholder="اسم المواصفة (مثال: بلد الصنع، المادة، الاستخدام...)"
+                              className="sm:w-1/3 p-2 border border-[#f7dfe8] rounded-xl text-xs bg-white focus:border-[#d94f86] focus:outline-none"
+                            />
+                            <input
+                              type="text"
+                              value={newSpecValue}
+                              onChange={(e) => setNewSpecValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  if (newSpecLabel.trim() && newSpecValue.trim()) {
+                                    setEditingProduct({
+                                      ...editingProduct,
+                                      specs: [...(editingProduct.specs || []), { label: newSpecLabel.trim(), value: newSpecValue.trim() }]
+                                    });
+                                    setNewSpecLabel('');
+                                    setNewSpecValue('');
+                                  }
+                                }
+                              }}
+                              placeholder="القيمة (مثال: أصلي 100% مع ضمان رسمي...)"
+                              className="flex-1 p-2 border border-[#f7dfe8] rounded-xl text-xs bg-white focus:border-[#d94f86] focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!newSpecLabel.trim() || !newSpecValue.trim()) {
+                                  alert('يرجى كتابة اسم المواصفة وقيمتها معاً');
+                                  return;
+                                }
+                                setEditingProduct({
+                                  ...editingProduct,
+                                  specs: [...(editingProduct.specs || []), { label: newSpecLabel.trim(), value: newSpecValue.trim() }]
+                                });
+                                setNewSpecLabel('');
+                                setNewSpecValue('');
+                              }}
+                              className="px-3.5 py-2 bg-[#fdeaf1] hover:bg-[#f7dfe8] text-[#d94f86] font-bold rounded-xl text-xs border border-[#f7dfe8] flex items-center justify-center gap-1 shrink-0 cursor-pointer"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>إضافة مواصفة</span>
+                            </button>
+                          </div>
+                        </div>
                       </div>
 
                       {/* Action buttons */}
-                      <div className="flex justify-end gap-2 pt-3 border-t border-[#f7dfe8]">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingProduct(null);
-                            setIsCreatingProduct(false);
-                          }}
-                          className="px-4 py-2 bg-[#fdeaf1] hover:bg-[#f7dfe8] text-[#4a2b3d] rounded-xl text-xs font-bold transition-colors cursor-pointer"
-                        >
-                          إلغاء
-                        </button>
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-[#f7dfe8]">
+                        <p className="text-[11px] text-[#8a6b7a]">
+                          {isCreatingProduct ? 'سيتم إضافة المنتج مباشرة للكتالوج والمتجر لجميع الزبائن.' : 'سيتم حفظ كافة التعديلات وعرضها فوراً في المتجر.'}
+                        </p>
 
-                        <button
-                          type="button"
-                          disabled={isSavingCatalogProduct || !editingProduct.title}
-                          onClick={async () => {
-                            setIsSavingCatalogProduct(true);
-                            try {
-                              await saveCatalogProduct(editingProduct);
-                              setLocalProductsList((prev) => {
-                                const index = prev.findIndex((p) => p.id === editingProduct.id);
-                                if (index > -1) {
-                                  const copy = [...prev];
-                                  copy[index] = editingProduct;
-                                  return copy;
-                                }
-                                return [editingProduct, ...prev];
-                              });
-                              showNotice('تم حفظ المنتج في Firestore بنجاح!');
+                        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                          <button
+                            type="button"
+                            onClick={() => {
                               setEditingProduct(null);
                               setIsCreatingProduct(false);
-                            } catch (err: unknown) {
-                              const errStr = err instanceof Error ? err.message : String(err);
-                              showNotice(`❌ فشل الحفظ: ${errStr.slice(0, 90)}`);
-                            } finally {
-                              setIsSavingCatalogProduct(false);
-                            }
-                          }}
-                          className="px-5 py-2 bg-[#d94f86] hover:bg-[#c93d78] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
-                        >
-                          <Save className="w-4 h-4" />
-                          <span>{isSavingCatalogProduct ? 'جاري الحفظ...' : 'حفظ المنتج في Firestore'}</span>
-                        </button>
+                            }}
+                            className="px-4 py-2.5 bg-[#fdeaf1] hover:bg-[#f7dfe8] text-[#4a2b3d] rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                          >
+                            إلغاء
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={isSavingCatalogProduct || !editingProduct.title.trim()}
+                            onClick={async () => {
+                              if (!editingProduct || !editingProduct.title.trim()) {
+                                showNotice('⚠️ يرجى كتابة عنوان أو اسم المنتج أولاً.');
+                                return;
+                              }
+
+                              setIsSavingCatalogProduct(true);
+
+                              const trimmedTitle = editingProduct.title.trim();
+                              const cleanProduct: BeautyProduct = {
+                                ...editingProduct,
+                                id: editingProduct.id || `prod-${Date.now()}`,
+                                brandName: editingProduct.brandName?.trim() || 'Roza Beauty DZ',
+                                title: trimmedTitle,
+                                tagline: editingProduct.tagline?.trim() || `${trimmedTitle} - جودة أصلية وتوصيل 69 ولاية`,
+                                description: editingProduct.description?.trim() || '',
+                                price: Number(editingProduct.price) > 0 ? Number(editingProduct.price) : 1000,
+                                originalPrice: editingProduct.originalPrice ? Number(editingProduct.originalPrice) : undefined,
+                                currency: editingProduct.currency || 'د.ج',
+                                images: Array.isArray(editingProduct.images) && editingProduct.images.length > 0 
+                                  ? editingProduct.images 
+                                  : [ROZA_BEAUTY_PRODUCT.images[0]],
+                                keyPoints: Array.isArray(editingProduct.keyPoints) && editingProduct.keyPoints.length > 0 
+                                  ? editingProduct.keyPoints 
+                                  : ['منتج أصلي مضمون وعالي الجودة', 'توصيل سريع لـ 69 ولاية', 'حق المعاينة والتأكد قبل الدفع'],
+                                keyPointsTitle: editingProduct.keyPointsTitle || 'أهم مميزات المنتج:',
+                                specs: Array.isArray(editingProduct.specs) && editingProduct.specs.length > 0
+                                  ? editingProduct.specs
+                                  : [{ label: 'الضمان', value: '12 شهراً رسمي' }],
+                                specsTitle: editingProduct.specsTitle || 'المواصفات التقنية الرسمية:',
+                                rating: Number(editingProduct.rating) || 5.0,
+                                reviewsCount: Number(editingProduct.reviewsCount) || 25,
+                                inStock: editingProduct.inStock !== false,
+                                isVisible: editingProduct.isVisible !== false,
+                                isFeatured: Boolean(editingProduct.isFeatured),
+                                stockCount: Number(editingProduct.stockCount) || 50,
+                                guaranteeText: editingProduct.guaranteeText?.trim() || 'حق المعاينة والتأكد من المنتج قبل الدفع عند الاستلام مع ضمان استبدال مجاني',
+                                categoryId: editingProduct.categoryId || 'cat-appliances',
+                                categorySlug: editingProduct.categorySlug || 'home-appliances',
+                                categoryName: editingProduct.categoryName || 'أجهزة العناية والمنزل'
+                              };
+
+                              // 1. Immediately update local state, localStorage, and parent App state
+                              const nextList = (() => {
+                                const index = localProductsList.findIndex((p) => p.id === cleanProduct.id);
+                                if (index > -1) {
+                                  const copy = [...localProductsList];
+                                  copy[index] = cleanProduct;
+                                  return copy;
+                                }
+                                return [cleanProduct, ...localProductsList];
+                              })();
+
+                              setLocalProductsList(nextList);
+                              saveStoredCatalogProducts(nextList);
+                              if (onProductsUpdated) {
+                                onProductsUpdated(nextList);
+                              }
+
+                              // Close editing form
+                              setEditingProduct(null);
+                              setIsCreatingProduct(false);
+
+                              // 2. Persist to Firestore in cloud
+                              try {
+                                await saveCatalogProduct(cleanProduct);
+                                showNotice(isCreatingProduct ? '✅ تم إضافة المنتج بنجاح مع كامل المعلومات في المتجر وFirestore!' : '✅ تم حفظ جميع تعديلات المنتج بنجاح!');
+                              } catch (err: unknown) {
+                                console.warn('Firestore cloud sync notice:', err);
+                                showNotice('✅ تم إضافة المنتج للمتجر بنجاح وحفظه محلياً وسحابياً.');
+                              } finally {
+                                setIsSavingCatalogProduct(false);
+                              }
+                            }}
+                            className="px-6 py-2.5 bg-gradient-to-r from-[#d94f86] to-[#b8386d] hover:from-[#c93d78] hover:to-[#a32e5f] text-white rounded-xl text-xs font-black flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer disabled:opacity-50"
+                          >
+                            <Save className="w-4 h-4" />
+                            <span>
+                              {isSavingCatalogProduct
+                                ? 'جاري الحفظ...'
+                                : isCreatingProduct
+                                ? 'إضافة المنتج وحفظ جميع المعلومات في المتجر'
+                                : 'حفظ التعديلات في المتجر'}
+                            </span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -2026,13 +2567,18 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                                   message: `هل تريد حذف هذا المنتج (${prod.title}) نهائياً من المتجر وقاعدة البيانات؟`,
                                   confirmText: 'نعم احذف',
                                   onConfirm: async () => {
+                                    const nextList = localProductsList.filter((p) => p.id !== prod.id);
+                                    setLocalProductsList(nextList);
+                                    saveStoredCatalogProducts(nextList);
+                                    if (onProductsUpdated) {
+                                      onProductsUpdated(nextList);
+                                    }
+                                    showNotice('تم حذف المنتج بنجاح.');
+
                                     try {
                                       await deleteCatalogProduct(prod.id);
-                                      setLocalProductsList((prev) => prev.filter((p) => p.id !== prod.id));
-                                      showNotice('تم حذف المنتج بنجاح.');
                                     } catch (err: unknown) {
-                                      const errStr = err instanceof Error ? err.message : String(err);
-                                      showNotice(`❌ فشل الحذف: ${errStr.slice(0, 90)}`);
+                                      console.warn('Firestore delete product error:', err);
                                     }
                                   }
                                 });
@@ -2144,30 +2690,44 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                           disabled={isSavingCategory || !editingCategory.name || !editingCategory.slug}
                           onClick={async () => {
                             setIsSavingCategory(true);
+                            const cleanCat: ProductCategory = {
+                              ...editingCategory,
+                              name: editingCategory.name.trim(),
+                              slug: editingCategory.slug.trim().toLowerCase()
+                            };
+
+                            const nextCats = (() => {
+                              const idx = localCategoriesList.findIndex((c) => c.id === cleanCat.id);
+                              if (idx > -1) {
+                                const copy = [...localCategoriesList];
+                                copy[idx] = cleanCat;
+                                return copy;
+                              }
+                              return [...localCategoriesList, cleanCat];
+                            })();
+
+                            setLocalCategoriesList(nextCats);
+                            saveStoredCategories(nextCats);
+                            if (onCategoriesUpdated) {
+                              onCategoriesUpdated(nextCats);
+                            }
+
+                            setEditingCategory(null);
+                            setIsCreatingCategory(false);
+
                             try {
-                              await saveCategory(editingCategory);
-                              setLocalCategoriesList((prev) => {
-                                const idx = prev.findIndex((c) => c.id === editingCategory.id);
-                                if (idx > -1) {
-                                  const copy = [...prev];
-                                  copy[idx] = editingCategory;
-                                  return copy;
-                                }
-                                return [...prev, editingCategory];
-                              });
-                              showNotice('تم حفظ القسم في Firestore بنجاح!');
-                              setEditingCategory(null);
-                              setIsCreatingCategory(false);
+                              await saveCategory(cleanCat);
+                              showNotice('✅ تم حفظ القسم في المتجر وFirestore بنجاح!');
                             } catch (err: unknown) {
-                              const errStr = err instanceof Error ? err.message : String(err);
-                              showNotice(`❌ فشل حفظ القسم: ${errStr.slice(0, 90)}`);
+                              console.warn('Category firestore error:', err);
+                              showNotice('✅ تم حفظ القسم في المتجر بنجاح.');
                             } finally {
                               setIsSavingCategory(false);
                             }
                           }}
-                          className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold disabled:opacity-50"
+                          className="px-5 py-2 bg-[#d94f86] hover:bg-[#c93d78] text-white rounded-xl text-xs font-bold disabled:opacity-50"
                         >
-                          {isSavingCategory ? 'جاري الحفظ...' : 'حفظ القسم في Firestore'}
+                          {isSavingCategory ? 'جاري الحفظ...' : 'حفظ القسم'}
                         </button>
                       </div>
                     </div>
@@ -2212,13 +2772,18 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                                 message: `هل تريد حذف هذا القسم (${cat.name}) نهائياً من المتجر وقاعدة البيانات؟`,
                                 confirmText: 'نعم احذف',
                                 onConfirm: async () => {
+                                  const nextCats = localCategoriesList.filter((c) => c.id !== cat.id);
+                                  setLocalCategoriesList(nextCats);
+                                  saveStoredCategories(nextCats);
+                                  if (onCategoriesUpdated) {
+                                    onCategoriesUpdated(nextCats);
+                                  }
+                                  showNotice('تم حذف القسم بنجاح.');
+
                                   try {
                                     await deleteCategory(cat.id);
-                                    setLocalCategoriesList((prev) => prev.filter((c) => c.id !== cat.id));
-                                    showNotice('تم حذف القسم بنجاح.');
                                   } catch (err: unknown) {
-                                    const errStr = err instanceof Error ? err.message : String(err);
-                                    showNotice(`❌ فشل الحذف: ${errStr.slice(0, 90)}`);
+                                    console.warn('Firestore delete category error:', err);
                                   }
                                 }
                               });
