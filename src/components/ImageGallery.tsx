@@ -94,6 +94,7 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
           <img
             src={currentImage}
             alt={`${productTitle} - صورة ${currentIndex + 1}`}
+            referrerPolicy="no-referrer"
             className={`relative z-10 w-full h-full transition-all duration-500 ${
               aspectMode === 'contain' ? 'object-contain' : 'object-cover'
             }`}
@@ -185,6 +186,7 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
             <img
               src={img}
               alt={`صورة مصغرة ${idx + 1}`}
+              referrerPolicy="no-referrer"
               className="w-full h-full object-contain"
               loading="lazy"
             />
@@ -219,6 +221,7 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
             <img
               src={currentImage}
               alt={productTitle}
+              referrerPolicy="no-referrer"
               className="max-h-[82vh] max-w-full object-contain rounded-xl shadow-2xl transition-all"
             />
 

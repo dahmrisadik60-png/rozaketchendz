@@ -58,14 +58,16 @@ import {
 import { AiInsightsTab } from './AiInsightsTab';
 import { DEFAULT_BANNER } from '../data/categories';
 import { ROZA_BEAUTY_PRODUCT } from '../data/products';
+import { CSV_IMPORTED_PRODUCTS } from '../data/importedProducts';
 import { compressImage, compressImageToDataUrl } from '../utils/imageCompressor';
+import { validateOriginalProductImage, generateProductAlbumFromOriginalImage } from '../services/imageToImageService';
 import { 
   X, Download, Search, Phone, MessageSquare, Trash2, 
   Package, Settings, Activity, Plus, Save, RefreshCw, 
   Send, Check, KeyRound, AlertCircle, Upload, CheckSquare, Square, 
   Star, Heart, Sparkles, Award, ListPlus, Image as ImageIcon, ShieldCheck,
   Layers, LayoutTemplate, Edit, Eye, EyeOff, Smartphone, Monitor, UploadCloud,
-  CheckCircle2, FileText, Tag
+  CheckCircle2, FileText, Tag, Code, Copy, ExternalLink
 } from 'lucide-react';
 
 interface AdminModalProps {
@@ -166,6 +168,36 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const [isAddingNewCategoryInline, setIsAddingNewCategoryInline] = useState(false);
   const [inlineNewCategoryName, setInlineNewCategoryName] = useState('');
 
+  // CSV products & HTML/JS embed modal states
+  const [showEmbedCodeModal, setShowEmbedCodeModal] = useState(false);
+  const [hasCopiedCode, setHasCopiedCode] = useState(false);
+
+  const handleImportCsvProducts = async () => {
+    try {
+      const existingIds = new Set(localProductsList.map((p) => p.id));
+      const newlyAdded = CSV_IMPORTED_PRODUCTS.filter((p) => !existingIds.has(p.id));
+
+      if (newlyAdded.length === 0) {
+        showNotice('ℹ️ جميع منتجات الـ CSV الـ 12 موجودة ومحدثة بالفعل في كتالوج متجرك!');
+        return;
+      }
+
+      const merged = [...localProductsList, ...newlyAdded];
+      setLocalProductsList(merged);
+      saveStoredCatalogProducts(merged);
+      onProductsUpdated?.(merged);
+
+      for (const prod of newlyAdded) {
+        saveCatalogProduct(prod).catch(() => {});
+      }
+
+      showNotice(`✅ تم بنجاح استيراد ${newlyAdded.length} منتج جديد من ملف الـ CSV إلى متجرك!`);
+    } catch (err: any) {
+      console.error('Error importing CSV products:', err);
+      showNotice('حدث خطأ أثناء استيراد المنتجات.');
+    }
+  };
+
   const handleCatalogFileUpload = async (files: FileList | File[] | null) => {
     if (!files || files.length === 0 || !editingProduct) return;
 
@@ -241,6 +273,72 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       if (catalogFileInputRef.current) {
         catalogFileInputRef.current.value = '';
       }
+    }
+  };
+
+  // -------------------------------------------------------------
+  // AI Commercial 4-Shot Photo Album Generation (Vision / Image-to-Image)
+  // Strictly requires original uploaded image and 100% preserves product identity
+  // -------------------------------------------------------------
+  const [isGeneratingAiAlbum, setIsGeneratingAiAlbum] = useState(false);
+  const [aiAlbumStepText, setAiAlbumStepText] = useState<string | null>(null);
+
+  const handleGenerateAiAlbum = async (target: 'catalog' | 'landing') => {
+    const currentImages = target === 'catalog' ? (editingProduct?.images || []) : (localProduct?.images || []);
+    
+    // 1. Mandatory requirement check: validate uploaded product image
+    const validation = validateOriginalProductImage(currentImages);
+    if (!validation.isValid || !validation.primaryImage) {
+      alert(
+        validation.message ||
+        '⚠️ شرط أساسي: يرجى رفع صورة المنتج الأصلية أولاً (عبر زر رفع صورة أو إفلاتها) ليتمكن الذكاء الاصطناعي (Vision / Image-to-Image) من تحليل ملامح منتجك الحقيقي والحفاظ على شكله بدقة.'
+      );
+      return;
+    }
+
+    setIsGeneratingAiAlbum(true);
+    setAiAlbumStepText('🔍 1/4: تحليل ملامح المنتج المرفوع، الألوان، والعلامة التجارية عبر Vision Model...');
+
+    try {
+      const prodTitle = target === 'catalog' ? editingProduct?.title : localProduct?.title;
+      const prodBrand = target === 'catalog' ? editingProduct?.brandName : localProduct?.brandName;
+      const prodCategory = target === 'catalog' ? editingProduct?.categoryName : localProduct?.categoryName;
+
+      // Synthesize the 4 high-end commercial studio shots directly using the uploaded product
+      const result = await generateProductAlbumFromOriginalImage(validation.primaryImage, {
+        title: prodTitle,
+        brand: prodBrand,
+        category: prodCategory,
+        onStepProgress: (stepText) => {
+          setAiAlbumStepText(stepText);
+        }
+      });
+
+      if (result.success && result.shots.length === 4) {
+        if (target === 'catalog') {
+          setEditingProduct((prev) => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              images: result.shots
+            };
+          });
+        } else {
+          setLocalProduct((prev) => ({
+            ...prev,
+            images: result.shots
+          }));
+        }
+        showNotice('✨ تم بنجاح توليد ألبوم الصور الـ 4 بتقنية Image-to-Image مع الحفاظ التام على شكل منتجك الأصلي!');
+      } else {
+        throw new Error('لم يتم استلام الصور الأربع بنجاح.');
+      }
+    } catch (err: any) {
+      console.error('Error generating AI album:', err);
+      alert('حدث خطأ أثناء معالجة الصورة عبر Vision Model: ' + (err.message || 'يرجى التأكد من رفع صورة صالحة'));
+    } finally {
+      setIsGeneratingAiAlbum(false);
+      setAiAlbumStepText(null);
     }
   };
 
@@ -1591,7 +1689,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
               {activeTab === 'products' && (
                 <div className="flex flex-col gap-6">
                   {/* Top Bar with Add Product CTA */}
-                  <div className="bg-white p-4 rounded-2xl border border-[#f7dfe8] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                  <div className="bg-white p-4 rounded-2xl border border-[#f7dfe8] flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
                     <div>
                       <h3 className="font-black text-[#4a2b3d] text-sm flex items-center gap-2">
                         <Layers className="w-4 h-4 text-[#d94f86]" />
@@ -1602,41 +1700,148 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                       </p>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingProduct({
-                          id: `prod-${Date.now()}`,
-                          brandName: 'Roza Beauty DZ',
-                          title: '',
-                          tagline: '',
-                          price: 4500,
-                          originalPrice: 6000,
-                          currency: 'د.ج',
-                          images: [],
-                          keyPoints: ['منتج أصلي مضمون وعالي الجودة'],
-                          keyPointsTitle: 'المميزات الرئيسية:',
-                          specs: [{ label: 'الضمان', value: '12 شهراً' }],
-                          specsTitle: 'المواصفات التقنية:',
-                          rating: 5.0,
-                          reviewsCount: 25,
-                          inStock: true,
-                          guaranteeText: 'حق المعاينة والتأكد من المنتج قبل الدفع عند الاستلام',
-                          categoryId: localCategoriesList[0]?.id || 'cat-appliances',
-                          categorySlug: localCategoriesList[0]?.slug || 'home-appliances',
-                          categoryName: localCategoriesList[0]?.name || 'أجهزة العناية والمنزل',
-                          isFeatured: false,
-                          isVisible: true,
-                          stockCount: 50
-                        });
-                        setIsCreatingProduct(true);
-                      }}
-                      className="px-4 py-2 bg-[#d94f86] hover:bg-[#c93d78] text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer self-start sm:self-auto"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>إضافة منتج جديد</span>
-                    </button>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setShowEmbedCodeModal(true)}
+                        className="px-3 py-2 bg-[#fdeaf1] hover:bg-[#f7dfe8] text-[#d94f86] rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                        title="عرض ونسخ كود HTML و JS للمنتجات"
+                      >
+                        <Code className="w-4 h-4" />
+                        <span>كود HTML / JS</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleImportCsvProducts}
+                        className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                        title="استيراد منتجات الـ CSV إلى الكتالوج"
+                      >
+                        <UploadCloud className="w-4 h-4 text-emerald-600" />
+                        <span>استيراد الـ CSV (12 منتج)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingProduct({
+                            id: `prod-${Date.now()}`,
+                            brandName: 'Roza Beauty DZ',
+                            title: '',
+                            tagline: '',
+                            price: 4500,
+                            originalPrice: 6000,
+                            currency: 'د.ج',
+                            images: [],
+                            keyPoints: ['منتج أصلي مضمون وعالي الجودة'],
+                            keyPointsTitle: 'المميزات الرئيسية:',
+                            specs: [{ label: 'الضمان', value: '12 شهراً' }],
+                            specsTitle: 'المواصفات التقنية:',
+                            rating: 5.0,
+                            reviewsCount: 25,
+                            inStock: true,
+                            guaranteeText: 'حق المعاينة والتأكد من المنتج قبل الدفع عند الاستلام',
+                            categoryId: localCategoriesList[0]?.id || 'cat-appliances',
+                            categorySlug: localCategoriesList[0]?.slug || 'home-appliances',
+                            categoryName: localCategoriesList[0]?.name || 'أجهزة العناية والمنزل',
+                            isFeatured: false,
+                            isVisible: true,
+                            stockCount: 50
+                          });
+                          setIsCreatingProduct(true);
+                        }}
+                        className="px-4 py-2 bg-[#d94f86] hover:bg-[#c93d78] text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>إضافة منتج جديد</span>
+                      </button>
+                    </div>
                   </div>
+
+                  {/* HTML / JS Code Embed Modal */}
+                  {showEmbedCodeModal && (
+                    <div className="bg-white p-5 rounded-2xl border-2 border-[#d94f86]/30 shadow-lg flex flex-col gap-4 animate-in fade-in">
+                      <div className="flex items-start justify-between border-b border-[#f7dfe8] pb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-[#fdeaf1] text-[#d94f86] flex items-center justify-center">
+                            <Code className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h4 className="font-extrabold text-sm text-[#4a2b3d]">
+                              كود HTML / JS لعرض المنتجات في موقعك الجديد
+                            </h4>
+                            <p className="text-[11px] text-[#8a6b7a]">
+                              تم تحويل بيانات الـ CSV (12 منتجاً) مع الصور، الأسعار القديمة والجديدة، وأزرار الطلب إلى كود جاهز للتضمين.
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setShowEmbedCodeModal(false)}
+                          className="p-1.5 rounded-lg hover:bg-[#fdeaf1] text-[#8a6b7a] cursor-pointer"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-between gap-2.5">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const code = `<!-- كود تضمين كتالوج المنتجات من Roza Beauty DZ -->
+<iframe src="/products-catalog.html" width="100%" height="800" style="border:none;border-radius:16px;" loading="lazy"></iframe>`;
+                              navigator.clipboard.writeText(code);
+                              setHasCopiedCode(true);
+                              setTimeout(() => setHasCopiedCode(false), 3000);
+                            }}
+                            className="px-3.5 py-1.5 rounded-xl bg-[#d94f86] hover:bg-[#c93d78] text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                          >
+                            {hasCopiedCode ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
+                            <span>{hasCopiedCode ? 'تم النسخ بنجاح!' : 'نسخ كود التضمين (iFrame)'}</span>
+                          </button>
+
+                          <a
+                            href="/products-catalog.html"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            <span>معاينة صفحة المنتجات المستقلة</span>
+                          </a>
+                        </div>
+
+                        <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                          ✓ جاهز للعمل مع أي موقع أو قالب HTML/JS
+                        </span>
+                      </div>
+
+                      {/* Products Summary Pills */}
+                      <div className="bg-[#fff8f5] p-3 rounded-xl border border-[#f7dfe8]">
+                        <span className="text-[11px] font-extrabold text-[#4a2b3d] block mb-2">
+                          قائمة منتجات الـ CSV المحولة ({CSV_IMPORTED_PRODUCTS.length} منتج):
+                        </span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                          {CSV_IMPORTED_PRODUCTS.map((p, idx) => (
+                            <div key={p.id} className="bg-white p-2 rounded-lg border border-[#f7dfe8] flex items-center gap-2">
+                              <img src={p.images[0]} alt={p.title} className="w-8 h-8 rounded-md object-cover border border-rose-100 shrink-0" />
+                              <div className="min-w-0 flex-1 text-right">
+                                <span className="text-[10px] font-bold text-[#4a2b3d] block truncate" title={p.title}>
+                                  {idx + 1}. {p.title}
+                                </span>
+                                <div className="flex items-center gap-1 text-[10px]">
+                                  {p.originalPrice && <span className="line-through text-gray-400">{p.originalPrice.toLocaleString()} د.ج</span>}
+                                  <span className="font-black text-[#d94f86]">{p.price.toLocaleString()} د.ج</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Product Form Modal / Section */}
                   {editingProduct && (
@@ -1969,6 +2174,99 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                             )}
                           </div>
 
+                          {/* Commercial AI Photo Album Generator Banner (Image-to-Image / Vision Model) */}
+                          {(() => {
+                            const hasOriginalImage = Boolean(editingProduct.images && editingProduct.images.length > 0 && editingProduct.images[0]?.trim());
+                            const primaryImageSrc = hasOriginalImage ? editingProduct.images[0] : null;
+
+                            return (
+                              <div className="flex flex-col gap-3 p-4 bg-gradient-to-r from-[#fdeaf1] via-[#fff8f5] to-[#fcf0f5] rounded-2xl border-2 border-[#d94f86]/35 mb-3 shadow-xs">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                  <div className="flex items-start gap-3">
+                                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#d94f86] to-[#b8386d] text-white flex items-center justify-center shadow-xs shrink-0 mt-0.5">
+                                      <Sparkles className="w-5 h-5 text-amber-300 animate-pulse" />
+                                    </div>
+                                    <div>
+                                      <h5 className="font-extrabold text-xs sm:text-sm text-[#4a2b3d] flex items-center gap-1.5 flex-wrap">
+                                        <span>توليد ألبوم الصور بالذكاء الاصطناعي (Google AI)</span>
+                                        <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-[#d94f86] text-white font-bold shadow-2xs">
+                                          Create & Edit Images - مطابق 100%
+                                        </span>
+                                      </h5>
+                                      <p className="text-[11px] text-[#735064] mt-0.5 leading-relaxed">
+                                        يحلل صورة منتجك الأصلية عبر نموذج الرؤية (Google Gemini Vision) ويولد 4 لقطات ستوديو احترافية <strong>دون تغيير شكل المنتج أو ابتكار منتج آخر</strong>.
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    disabled={isGeneratingAiAlbum}
+                                    onClick={() => handleGenerateAiAlbum('catalog')}
+                                    className={`px-4 py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer shrink-0 ${
+                                      hasOriginalImage
+                                        ? 'bg-gradient-to-r from-[#d94f86] to-[#b8386d] hover:from-[#c93d78] hover:to-[#a32e5f] text-white'
+                                        : 'bg-gradient-to-r from-amber-600 to-amber-700 text-white hover:brightness-105'
+                                    } disabled:opacity-60`}
+                                  >
+                                    {isGeneratingAiAlbum ? (
+                                      <>
+                                        <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                                        <span>جاري التحليل والتوليد...</span>
+                                      </>
+                                    ) : hasOriginalImage ? (
+                                      <>
+                                        <Sparkles className="w-4 h-4 text-amber-300" />
+                                        <span>توليد ألبوم الصور (Google AI)</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <AlertCircle className="w-4 h-4 text-amber-200" />
+                                        <span>توليد الألبوم (ارفع صورة أولاً)</span>
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+
+                                {/* Prerequisite & Vision Status Box */}
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-2 border-t border-[#d94f86]/15">
+                                  {hasOriginalImage && primaryImageSrc ? (
+                                    <div className="flex items-center gap-2.5 text-xs text-emerald-800 bg-emerald-50/80 px-3 py-1.5 rounded-xl border border-emerald-200">
+                                      <div className="w-6 h-6 rounded-lg overflow-hidden border border-emerald-300 shrink-0 bg-white">
+                                        <img src={primaryImageSrc} alt="Reference" className="w-full h-full object-cover" />
+                                      </div>
+                                      <span className="font-semibold text-[11px]">
+                                        ✅ <strong>الصورة الأصلية جاهزة:</strong> سيتم تحليل ملامح المنتج والألوان والماركة مع الحفاظ التام على شكل منتجك.
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-2 text-xs text-amber-900 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200">
+                                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                                      <span className="font-semibold text-[11px]">
+                                        ⚠️ <strong>شرط أساسي مفقود:</strong> يرجى رفع صورة المنتج الأصلية أولاً (بالأسفل) ليتمكن الذكاء الاصطناعي من تحليلها وتوليد الزوايا المطابقة.
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-[#8a6b7a] flex-wrap justify-end">
+                                    <span className="px-2 py-0.5 bg-white rounded-md border border-[#f7dfe8]">1. ستوديو خلفية داكنة فخمة</span>
+                                    <span className="px-2 py-0.5 bg-white rounded-md border border-[#f7dfe8]">2. زاوية جانبية احترافية</span>
+                                    <span className="px-2 py-0.5 bg-white rounded-md border border-[#f7dfe8]">3. ماكرو مقرب للتفاصيل والشعار</span>
+                                    <span className="px-2 py-0.5 bg-white rounded-md border border-[#f7dfe8]">4. داخل منزل واقعي (صالة/مطبخ)</span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
+
+                          {/* AI Generation Step Progress Banner */}
+                          {isGeneratingAiAlbum && aiAlbumStepText && (
+                            <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl text-xs font-bold flex items-center gap-2 mb-3 animate-pulse shadow-xs">
+                              <RefreshCw className="w-4 h-4 animate-spin text-amber-600 shrink-0" />
+                              <span>{aiAlbumStepText}</span>
+                            </div>
+                          )}
+
                           {/* Upload Box: Phone or Desktop with support for ANY image format */}
                           <div
                             onDragOver={(e) => {
@@ -2081,6 +2379,13 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                                   }`}
                                 >
                                   <img src={img} alt="" className="w-full h-full object-cover" />
+
+                                  {/* Perspective badge for commercial sequence */}
+                                  {i < 4 && (
+                                    <span className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/70 backdrop-blur-xs text-white text-[8px] font-bold rounded-md pointer-events-none">
+                                      {['1. ستوديو أمامي', '2. زاوية 45°', '3. ماكرو التفاصيل', '4. بيئة الاستخدام'][i]}
+                                    </span>
+                                  )}
 
                                   {/* Badge for primary image */}
                                   {i === 0 ? (
@@ -3359,6 +3664,99 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                     <div className="bg-amber-50/70 border border-amber-200 p-3 rounded-xl text-xs text-amber-900 font-medium leading-relaxed">
                       💡 <strong>نصيحة لإدارة الألبوم:</strong> يمكنك الضغط على <em>"رفع صورة من هاتفك"</em> لإضافة صورك الجديدة، واستخدام زر <em>"حذف كافة الصور القديمة"</em> لحذف الصور الافتراضية وحفظ صورك الخاصة فقط فورياً!
                     </div>
+
+                    {/* Commercial AI Photo Album Generator for Landing Product (Image-to-Image / Vision Model) */}
+                    {(() => {
+                      const hasOriginalImage = Boolean(localProduct.images && localProduct.images.length > 0 && localProduct.images[0]?.trim());
+                      const primaryImageSrc = hasOriginalImage ? localProduct.images[0] : null;
+
+                      return (
+                        <div className="flex flex-col gap-3 p-4 bg-gradient-to-r from-[#fdeaf1] via-[#fff8f5] to-[#fcf0f5] rounded-2xl border-2 border-[#d94f86]/35 shadow-xs">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="flex items-start gap-3">
+                              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#d94f86] to-[#b8386d] text-white flex items-center justify-center shadow-xs shrink-0 mt-0.5">
+                                <Sparkles className="w-5 h-5 text-amber-300 animate-pulse" />
+                              </div>
+                              <div>
+                                <h5 className="font-extrabold text-xs sm:text-sm text-[#4a2b3d] flex items-center gap-1.5 flex-wrap">
+                                  <span>توليد ألبوم الصور بالذكاء الاصطناعي (Google AI)</span>
+                                  <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-[#d94f86] text-white font-bold shadow-2xs">
+                                    Create & Edit Images - مطابق 100%
+                                  </span>
+                                </h5>
+                                <p className="text-[11px] text-[#735064] mt-0.5 leading-relaxed">
+                                  يحلل صورة منتجك الأصلية عبر نموذج الرؤية (Google Gemini Vision) ويولد 4 لقطات ستوديو احترافية <strong>دون تغيير شكل المنتج أو ابتكار منتج آخر</strong>.
+                                </p>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              disabled={isGeneratingAiAlbum}
+                              onClick={() => handleGenerateAiAlbum('landing')}
+                              className={`px-4 py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer shrink-0 ${
+                                hasOriginalImage
+                                  ? 'bg-gradient-to-r from-[#d94f86] to-[#b8386d] hover:from-[#c93d78] hover:to-[#a32e5f] text-white'
+                                  : 'bg-gradient-to-r from-amber-600 to-amber-700 text-white hover:brightness-105'
+                              } disabled:opacity-60`}
+                            >
+                              {isGeneratingAiAlbum ? (
+                                <>
+                                  <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                                  <span>جاري التحليل والتوليد...</span>
+                                </>
+                              ) : hasOriginalImage ? (
+                                <>
+                                  <Sparkles className="w-4 h-4 text-amber-300" />
+                                  <span>توليد ألبوم الصور (Google AI)</span>
+                                </>
+                              ) : (
+                                <>
+                                  <AlertCircle className="w-4 h-4 text-amber-200" />
+                                  <span>توليد الألبوم (ارفع صورة أولاً)</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+
+                          {/* Prerequisite & Vision Status Box */}
+                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-2 border-t border-[#d94f86]/15">
+                            {hasOriginalImage && primaryImageSrc ? (
+                              <div className="flex items-center gap-2.5 text-xs text-emerald-800 bg-emerald-50/80 px-3 py-1.5 rounded-xl border border-emerald-200">
+                                <div className="w-6 h-6 rounded-lg overflow-hidden border border-emerald-300 shrink-0 bg-white">
+                                  <img src={primaryImageSrc} alt="Reference" className="w-full h-full object-cover" />
+                                </div>
+                                <span className="font-semibold text-[11px]">
+                                  ✅ <strong>الصورة الأصلية جاهزة:</strong> سيتم تحليل ملامح المنتج والألوان والماركة مع الحفاظ التام على شكل منتجك.
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 text-xs text-amber-900 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200">
+                                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                                <span className="font-semibold text-[11px]">
+                                  ⚠️ <strong>شرط أساسي مفقود:</strong> يرجى رفع صورة المنتج الأصلية أولاً (بالأسفل) ليتمكن الذكاء الاصطناعي من تحليلها وتوليد الزوايا المطابقة.
+                                </span>
+                              </div>
+                            )}
+
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-[#8a6b7a] flex-wrap justify-end">
+                              <span className="px-2 py-0.5 bg-white rounded-md border border-[#f7dfe8]">1. ستوديو خلفية داكنة فخمة</span>
+                              <span className="px-2 py-0.5 bg-white rounded-md border border-[#f7dfe8]">2. زاوية جانبية احترافية</span>
+                              <span className="px-2 py-0.5 bg-white rounded-md border border-[#f7dfe8]">3. ماكرو مقرب للتفاصيل والشعار</span>
+                              <span className="px-2 py-0.5 bg-white rounded-md border border-[#f7dfe8]">4. داخل منزل واقعي (صالة/مطبخ)</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* AI Album Generation Progress */}
+                    {isGeneratingAiAlbum && aiAlbumStepText && (
+                      <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl text-xs font-bold flex items-center gap-2 animate-pulse shadow-xs">
+                        <RefreshCw className="w-4 h-4 animate-spin text-amber-600 shrink-0" />
+                        <span>{aiAlbumStepText}</span>
+                      </div>
+                    )}
 
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                       <button

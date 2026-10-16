@@ -1,5 +1,5 @@
 import { Order, BeautyProduct, OrderStatus, CustomerReview, ProductCategory } from '../types';
-import { ROZA_BEAUTY_PRODUCT } from '../data/products';
+import { ROZA_BEAUTY_PRODUCT, INITIAL_STORE_PRODUCTS } from '../data/products';
 import { ALGERIAN_CUSTOMER_REVIEWS } from '../data/reviews';
 
 export const STORAGE_ORDERS_KEY = 'roza_orders';
@@ -350,13 +350,27 @@ export function getStoredCatalogProducts(): BeautyProduct[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        // Automatically merge any newly introduced products (such as the CSV-imported coffee machines)
+        const existingIds = new Set(parsed.map((p) => p.id));
+        let hasNew = false;
+        const merged = [...parsed];
+        for (const item of INITIAL_STORE_PRODUCTS) {
+          if (!existingIds.has(item.id)) {
+            merged.push(item);
+            hasNew = true;
+          }
+        }
+        if (hasNew) {
+          saveStoredCatalogProducts(merged);
+        }
+        return merged;
       }
     }
   } catch (e) {
     console.error('Failed to load catalog products from storage:', e);
   }
-  return [];
+  saveStoredCatalogProducts(INITIAL_STORE_PRODUCTS);
+  return INITIAL_STORE_PRODUCTS;
 }
 
 export function saveStoredCatalogProducts(products: BeautyProduct[]): void {

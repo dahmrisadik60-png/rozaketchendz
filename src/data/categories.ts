@@ -2,12 +2,20 @@ import { ProductCategory, StoreBanner } from '../types';
 
 export const DEFAULT_CATEGORIES: ProductCategory[] = [
   {
+    id: 'cat-coffee-machines',
+    name: 'ماكينات القهوة والاسبريسو',
+    slug: 'coffee-machines',
+    description: 'أفخم ماكينات القهوة والاسبريسو الإيطالية الأصلية DeLonghi و SMEG',
+    icon: 'Coffee',
+    order: 1
+  },
+  {
     id: 'cat-appliances',
     name: 'أجهزة العناية والمنزل',
     slug: 'home-appliances',
     description: 'أفضل أجهزة التنظيف الذكية والعناية المنزلية العصرية',
     icon: 'Sparkles',
-    order: 1
+    order: 2
   },
   {
     id: 'cat-hair-beauty',

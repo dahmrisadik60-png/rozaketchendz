@@ -41,6 +41,7 @@ import {
   AdSpend
 } from '../types';
 import { ROZA_BEAUTY_PRODUCT } from '../data/products';
+import { CSV_IMPORTED_PRODUCTS } from '../data/importedProducts';
 import { ALGERIAN_CUSTOMER_REVIEWS } from '../data/reviews';
 import { DEFAULT_CATEGORIES, DEFAULT_BANNER } from '../data/categories';
 
@@ -696,6 +697,10 @@ export async function runStorefrontMigration(): Promise<void> {
 
       await saveCatalogProduct(primaryProduct);
       await saveCatalogProduct(companionProduct);
+
+      for (const importedProd of CSV_IMPORTED_PRODUCTS) {
+        await saveCatalogProduct(importedProd);
+      }
 
       // Save categories
       for (const cat of DEFAULT_CATEGORIES) {

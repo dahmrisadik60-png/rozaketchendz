@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>كتالوج المنتجات - Roza Beauty DZ</title>
+  <style>
+    :root {
+      --primary: #d94f86;
+      --primary-hover: #c93d78;
+      --primary-light: #fdeaf1;
+      --text-main: #4a2b3d;
+      --text-muted: #8a6b7a;
+      --gold: #c9a45c;
+      --border: #f7dfe8;
+      --bg: #fffbf9;
+      --white: #ffffff;
+      --radius: 16px;
+      --shadow: 0 4px 15px rgba(217, 79, 134, 0.08);
+      --shadow-hover: 0 10px 30px rgba(217, 79, 134, 0.2);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      padding: 30px 15px;
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 1240px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    .catalog-header {
+      text-align: center;
+      margin-bottom: 35px;
+    }
+
+    .catalog-header h1 {
+      font-size: 28px;
+      font-weight: 900;
+      color: var(--text-main);
+      margin-bottom: 8px;
+    }
+
+    .catalog-header p {
+      font-size: 14px;
+      color: var(--text-muted);
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    /* Filters Bar */
+    .filters-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 25px;
+      background: var(--white);
+      padding: 14px 20px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+
+    .filter-buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      background: var(--primary-light);
+      color: var(--text-main);
+      border: none;
+      padding: 8px 16px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .filter-btn:hover, .filter-btn.active {
+      background: var(--primary);
+      color: var(--white);
+    }
+
+    .search-input {
+      padding: 8px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-size: 13px;
+      outline: none;
+      min-width: 220px;
+      transition: border-color 0.2s;
+    }
+
+    .search-input:focus {
+      border-color: var(--primary);
+    }
+
+    /* Products Grid */
+    .products-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 20px;
+    }
+
+    /* Product Card */
+    .product-card {
+      background: var(--white);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      display: flex;
+      flex-col: column;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+    }
+
+    .product-card:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-hover);
+      border-color: rgba(217, 79, 134, 0.4);
+    }
+
+    .card-badge {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: var(--primary);
+      color: var(--white);
+      font-size: 11px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 8px;
+      z-index: 2;
+      box-shadow: 0 2px 8px rgba(217, 79, 134, 0.3);
+    }
+
+    .card-image-wrap {
+      position: relative;
+      width: 100%;
+      padding-top: 100%;
+      background: #fff8f5;
+      overflow: hidden;
+    }
+
+    .card-image-wrap img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.4s ease;
+    }
+
+    .product-card:hover .card-image-wrap img {
+      transform: scale(1.06);
+    }
+
+    .card-content {
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      flex-grow: 1;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .card-brand {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--primary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-main);
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      min-height: 36px;
+    }
+
+    .card-footer {
+      border-top: 1px solid var(--border);
+      padding-top: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .price-box {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .old-price {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-decoration: line-through;
+      font-weight: 600;
+      line-height: 1;
+      margin-bottom: 2px;
+    }
+
+    .new-price {
+      font-size: 16px;
+      font-weight: 900;
+      color: var(--primary);
+      line-height: 1.2;
+    }
+
+    .buy-btn {
+      background: var(--primary);
+      color: var(--white);
+      border: none;
+      padding: 8px 14px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: background 0.2s, transform 0.1s;
+      text-decoration: none;
+    }
+
+    .buy-btn:hover {
+      background: var(--primary-hover);
+    }
+
+    .buy-btn:active {
+      transform: scale(0.96);
+    }
+
+    @media (max-width: 600px) {
+      .catalog-header h1 { font-size: 22px; }
+      .products-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+      .card-content { padding: 10px; }
+      .new-price { font-size: 14px; }
+      .buy-btn { padding: 6px 10px; font-size: 11px; }
+      .card-title { font-size: 12px; min-height: 32px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="catalog-header">
+      <h1>كتالوج ماكينات القهوة والأجهزة الأصلية</h1>
+      <p>أفخم أجهزة القهوة الإيطالية الأصلية DeLonghi و SMEG بأسعار تنافسية مع التوصيل والدفع عند الاستلام</p>
+    </div>
+
+    <!-- Filters & Search -->
+    <div class="filters-bar">
+      <div class="filter-buttons">
+        <button class="filter-btn active" onclick="filterBrand('all')">الكل (<span id="count-all">0</span>)</button>
+        <button class="filter-btn" onclick="filterBrand('DeLonghi')">DeLonghi</button>
+        <button class="filter-btn" onclick="filterBrand('SMEG')">SMEG</button>
+      </div>
+      <input type="text" id="searchInput" class="search-input" placeholder="بحث عن منتج أو كود..." oninput="handleSearch()" />
+    </div>
+
+    <!-- Dynamic Grid -->
+    <div id="productsGrid" class="products-grid"></div>
+  </div>
+
+  <script>
+    // 1. مصفوفة بيانات المنتجات المستخرجة من ملف CSV
+    const products = [
+      {
+        id: "delonghi-magnifica-s-smart-ecam-250-23-sb",
+        title: "CAFETERA DELONGHI MAGNIFICA S SMART COMPLETAMENTE AUTOMÁTICA ECAM 250.23.SB [Classe énergétique A+]",
+        brand: "DeLonghi",
+        oldPrice: 139000,
+        newPrice: 124000,
+        currency: "د.ج",
+        image: "https://i0.wp.com/fassil.shop/wp-content/uploads/2025/12/FASSIL-SHOP-09-6-scaled.jpg?resize=630%2C630&ssl=1",
+        url: "https://fassil.shop/product/cafetera-delonghi-magnifica-s-smart-completamente-automatica-ecam-250-23-sb-classe-energetique-a/"
+      },
+      {
+        id: "smeg-dcf02pbeu-bleu-azur",
+        title: "CAFETIÈRE FILTRE SMEG BLEU AZUR 1.4L 10 TASSES DCF02PBEU",
+        brand: "SMEG",
+        oldPrice: 64000,
+        newPrice: 51000,
+        currency: "د.ج",
+        image: "https://i0.wp.com/fassil.shop/wp-content/uploads/2025/03/DCF02PBEU.jpg?resize=630%2C630&ssl=1",
+        url: "https://fassil.shop/product/cafetiere-filtre-smeg-bleu-azur-1-4l-10-tasses-dcf02pbeu/"
+      },
+      {
+        id: "smeg-dcf02creu-creme",
+        title: "CAFETIERE SMEG A FILTER ANNEE 50 1050W/1.4 LT/10 TASSES/AFFICHEUR CREME DCF02CREU.",
+        brand: "SMEG",
+        oldPrice: 64000,
+        newPrice: 52000,
+        currency: "د.ج",
+        image: "https://i0.wp.com/fassil.shop/wp-content/uploads/2025/03/DCF02CREU.jpg?resize=630%2C630&ssl=1",
+        url: "https://fassil.shop/product/cafetiere-smeg-a-filter-annee-50-1050w-1-4-lt-10-tasses-afficheur-creme-dcf02creu/"
+      },
+      {
+        id: "smeg-dcf02wheu-blanc",
+        title: "CAFETIERE SMEG BLANC 1,25 L 10 TASSES DCF02WHEU",
+        brand: "SMEG",
+        oldPrice: 64000,
+        newPrice: 51000,
+        currency: "د.ج",
+        image: "https://i0.wp.com/fassil.shop/wp-content/uploads/2025/03/DCF02WHEU.jpg?resize=630%2C630&ssl=1",
+        url: "https://fassil.shop/product/cafetiere-smeg-blanc-125-l-10-tasses-dcf02wheu/"
+      },
+      {
+        id: "smeg-dcf02bleu-noir",
+        title: "CAFETIERE SMEG NOIR 1.25 L 10 TASSES DCF02BLEU",
+        brand: "SMEG",
+        oldPrice: 64000,
+        newPrice: 52000,
+        currency: "د.ج",
+        image: "https://i0.wp.com/fassil.shop/wp-content/uploads/2025/03/DCF02BLEU.jpg?resize=630%2C630&ssl=1",
+        url: "https://fassil.shop/product/cafetiere-smeg-noir-1-25-l-10-tasses-dcf02bleu/"
+      },
+      {
+        id: "smeg-dcf02pkeu-rose",
+        title: "CAFETIERE SMEG ROSE DCF02PKEU",
+        brand: "SMEG",
+        oldPrice: 64000,
+        newPrice: 52000,
+        currency: "د.ج",
+        image: "https://i0.wp.com/fassil.shop/wp-content/uploads/2025/03/DCF02PKEU.jpg?resize=630%2C630&ssl=1",
+        url: "https://fassil.shop/product/cafetiere-smeg-rose-1-4-l-dcf02pkeu/"
+      },
+      {
+        id: "smeg-dcf02rdeu-rouge",
+        title: "CAFETIÈRE SMEG ROUGE DCF02RDEU",
+        brand: "SMEG",
+        oldPrice: 64000,
+        newPrice: 55000,
+        currency: "د.ج",
+        image: "https://i0.wp.com/fassil.shop/wp-content/uploads/2025/03/DCF02RDEU.jpg?resize=630%2C630&ssl=1",
+        url: "https://fassil.shop/product/cafetiere-filtre-smeg-rouge-dcf02rdeu/"
+      },
+      {
+        id: "smeg-dcf02pgeu-vert-deau",
+        title: "CAFETIERE SMEG Vert d’Eau 1,25 L 10 TASSES DCF02PGEU",
+        brand: "SMEG",
+        oldPrice: 64000,
+        newPrice: 52000,
+        currency: "د.ج",
+        image: "https://i0.wp.com/fassil.shop/wp-content/uploads/2025/03/DCF02PGEU.jpg?resize=630%2C630&ssl=1",
+        url: "https://fassil.shop/product/cafetiere-smeg-vert-deau-125-l-10-tasses-dcf02pgeu/"
+      },
+      {
+        id: "delonghi-lattissima-one-evo-en510-w",
+        title: "De’Longhi Nespresso Lattissima One Evo , Machine a Café Capsule, Expresso et Cappuccino, 1450W, Blanc EN510.W",
+        brand: "DeLonghi",
+        oldPrice: 75000,
+        newPrice: 69000,
+        currency: "د.ج",
+        image: "https://i0.wp.com/fassil.shop/wp-content/uploads/2025/03/FASSSSSSSSIL-03-scaled.jpg?resize=630%2C630&ssl=1",
+        url: "https://fassil.shop/product/delonghi-nespresso-lattissima-one-evo-machine-a-cafe-capsule-expresso-et-cappuccino-1450w-blanc-classe-energetique-a-en510-w/"
+      },
+      {
+        id: "delonghi-stilosa-ec230-bk",
+        title: "De’Longhi Stilosa Machine à Expresso avec Bar Barista, Cafetière et Machine à Cappuccino, Noir, 1100 W [Classe énergétique A+] EC230.BK",
+        brand: "DeLonghi",
+        oldPrice: 39000,
+        newPrice: 35900,
+        currency: "د.ج",
+        image: "https://i0.wp.com/fassil.shop/wp-content/uploads/2025/03/FFF-03-scaled.jpg?resize=630%2C630&ssl=1",
+        url: "https://fassil.shop/product/delonghi-stilosa-machine-a-expresso-avec-bar-barista-cafetiere-et-machine-a-cappuccino-noir-1100-w-classe-energetique-a-ec230-bk/"
+      },
+      {
+        id: "delonghi-magnifica-s-smart-ecam-250-23-sb-si",
+        title: "DELONGHI CAFETERA MAGNIFICA S SMART COMPLETAMENTE AUTOMÁTICA ECAM 250.23.SB Si [Classe énergétique A+]",
+        brand: "DeLonghi",
+        oldPrice: 129000,
+        newPrice: 122000,
+        currency: "د.ج",
+        image: "https://i0.wp.com/fassil.shop/wp-content/uploads/2025/03/SMART-06-scaled.jpg?resize=630%2C630&ssl=1",
+        url: "https://fassil.shop/product/delonghi-cafetera-magnifica-s-smart-completamente-automatica-ecam-250-23-sb-si-classe-energetique-a/"
+      },
+      {
+        id: "delonghi-clessidra-icm17210",
+        title: "DeLonghi Clessidra – Cafetière filtre 10 Tasses Gris | Infusion 2-en-1 par Versement et Filtre",
+        brand: "DeLonghi",
+        oldPrice: 26000,
+        newPrice: 23500,
+        currency: "د.ج",
+        image: "https://i0.wp.com/fassil.shop/wp-content/uploads/2026/10/FASSIL-SHOP-01-16.webp?resize=630%2C630&ssl=1",
+        url: "https://fassil.shop/product/delonghi-clessidra-cafetiere-filtre-10-tasses-gris-infusion-2-en-1-par-versement-et-filtre/"
+      }
+    ];
+
+    let currentFilter = 'all';
+    let searchQuery = '';
+
+    function formatNumber(num) {
+      return num.toLocaleString('ar-DZ');
+    }
+
+    function calculateDiscount(oldPrice, newPrice) {
+      if (!oldPrice || oldPrice <= newPrice) return 0;
+      return Math.round(((oldPrice - newPrice) / oldPrice) * 100);
+    }
+
+    function renderProducts() {
+      const grid = document.getElementById('productsGrid');
+      
+      const filtered = products.filter(p => {
+        const matchesBrand = currentFilter === 'all' || p.brand.toLowerCase() === currentFilter.toLowerCase();
+        const matchesSearch = !searchQuery || p.title.toLowerCase().includes(searchQuery.toLowerCase()) || p.brand.toLowerCase().includes(searchQuery.toLowerCase());
+        return matchesBrand && matchesSearch;
+      });
+
+      document.getElementById('count-all').innerText = products.length;
+
+      if (filtered.length === 0) {
+        grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #8a6b7a;">لا توجد منتجات مطابقة للبحث</div>';
+        return;
+      }
+
+      grid.innerHTML = filtered.map(item => {
+        const discount = calculateDiscount(item.oldPrice, item.newPrice);
+        return `
+          <div class="product-card">
+            ${discount > 0 ? `<div class="card-badge">تخفيض -${discount}%</div>` : ''}
+            <div class="card-image-wrap">
+              <img src="${item.image}" alt="${item.title}" loading="lazy" />
+            </div>
+            <div class="card-content">
+              <div>
+                <div class="card-brand">${item.brand}</div>
+                <h3 class="card-title" title="${item.title}">${item.title}</h3>
+              </div>
+              <div class="card-footer">
+                <div class="price-box">
+                  ${item.oldPrice ? `<span class="old-price">${formatNumber(item.oldPrice)} ${item.currency}</span>` : ''}
+                  <span class="new-price">${formatNumber(item.newPrice)} ${item.currency}</span>
+                </div>
+                <a href="${item.url}" target="_blank" class="buy-btn">
+                  <span>طلب الآن</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function filterBrand(brand) {
+      currentFilter = brand;
+      document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+      renderProducts();
+    }
+
+    function handleSearch() {
+      searchQuery = document.getElementById('searchInput').value.trim();
+      renderProducts();
+    }
+
+    // Initial render on load
+    renderProducts();
+  </script>
+</body>
+</html>
