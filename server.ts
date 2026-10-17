@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
+import fs from 'fs';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
 
@@ -260,6 +261,100 @@ app.post('/api/generate-product-album', async (req: Request, res: Response) => {
       success: false,
       error: error.message || 'Internal server error',
     });
+  }
+});
+
+/**
+ * نقطة النهاية: /api/fassil-products
+ * جلب قائمة المنتجات المخزنة في fassilProducts.json
+ */
+app.get('/api/fassil-products', (_req, res) => {
+  try {
+    const jsonPath = path.resolve(process.cwd(), 'src/data/fassilProducts.json');
+    if (fs.existsSync(jsonPath)) {
+      const data = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+      return res.json({ success: true, count: data.length, products: data });
+    }
+    return res.json({ success: true, count: 0, products: [] });
+  } catch (err: any) {
+    console.error('Error reading fassilProducts.json:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * نقطة النهاية: /api/import-products
+ * حفظ وتمرير قائمة المنتجات المستخرجة والمنظفة إلى fassilProducts.json وملف الـ CSV
+ */
+app.post('/api/import-products', (req: Request, res: Response) => {
+  try {
+    const { products } = req.body;
+    if (!Array.isArray(products) || products.length === 0) {
+      return res.status(400).json({ success: false, error: 'No products provided' });
+    }
+
+    const jsonPath = path.resolve(process.cwd(), 'src/data/fassilProducts.json');
+    let existingProducts: any[] = [];
+    if (fs.existsSync(jsonPath)) {
+      try {
+        existingProducts = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+      } catch {
+        existingProducts = [];
+      }
+    }
+
+    const seen = new Set<string>();
+    existingProducts.forEach((p) => {
+      const key = (p.title || '').trim().toLowerCase();
+      if (key) seen.add(key);
+    });
+
+    let addedCount = 0;
+    const formattedNewProducts = [];
+
+    for (const item of products) {
+      const title = (item.title || '').trim();
+      if (!title) continue;
+      const key = title.toLowerCase();
+
+      if (!seen.has(key)) {
+        seen.add(key);
+        addedCount++;
+        const formatted = {
+          title,
+          price: item.price || item.currentPrice || '25000 د.ج',
+          url: item.url || item.Title_URL || `https://fassil.shop/product/${encodeURIComponent(title.toLowerCase().replace(/[^a-z0-9]+/g, '-'))}/`,
+          image: item.image || item.Image || '',
+          category: item.category || 'عام'
+        };
+        existingProducts.push(formatted);
+        formattedNewProducts.push(formatted);
+      }
+    }
+
+    // Write updated fassilProducts.json
+    fs.writeFileSync(jsonPath, JSON.stringify(existingProducts, null, 2), 'utf8');
+
+    // Also update public/cleaned_fassil.csv
+    try {
+      let csvContent = '\uFEFF"Title","Price","Category","Title_URL","Image"\r\n';
+      for (const p of existingProducts) {
+        csvContent += `"${(p.title || '').replace(/"/g, '""')}","${(p.price || '').replace(/"/g, '""')}","${(p.category || 'عام').replace(/"/g, '""')}","${(p.url || '').replace(/"/g, '""')}","${(p.image || '').replace(/"/g, '""')}"\r\n`;
+      }
+      fs.writeFileSync(path.resolve(process.cwd(), 'public/cleaned_fassil.csv'), csvContent, 'utf8');
+    } catch (csvErr) {
+      console.warn('Could not update cleaned_fassil.csv:', csvErr);
+    }
+
+    return res.json({
+      success: true,
+      message: `تم بنجاح حفظ وتحديث ${existingProducts.length} منتجاً في قاعدة بيانات الموقع!`,
+      totalCount: existingProducts.length,
+      addedCount
+    });
+  } catch (err: any) {
+    console.error('Error saving imported products:', err);
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 

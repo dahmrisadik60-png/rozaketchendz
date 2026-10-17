@@ -59,6 +59,8 @@ import { AiInsightsTab } from './AiInsightsTab';
 import { DEFAULT_BANNER } from '../data/categories';
 import { ROZA_BEAUTY_PRODUCT } from '../data/products';
 import { CSV_IMPORTED_PRODUCTS } from '../data/importedProducts';
+import { FASSIL_RAW_PRODUCTS, FASSIL_STORE_PRODUCTS } from '../data/fassilCatalog';
+import { classifyProductTitle, transformToActiveProduct } from '../utils/productClassifier';
 import { compressImage, compressImageToDataUrl } from '../utils/imageCompressor';
 import { validateOriginalProductImage, generateProductAlbumFromOriginalImage } from '../services/imageToImageService';
 import { 
@@ -67,7 +69,8 @@ import {
   Send, Check, KeyRound, AlertCircle, Upload, CheckSquare, Square, 
   Star, Heart, Sparkles, Award, ListPlus, Image as ImageIcon, ShieldCheck,
   Layers, LayoutTemplate, Edit, Eye, EyeOff, Smartphone, Monitor, UploadCloud,
-  CheckCircle2, FileText, Tag, Code, Copy, ExternalLink
+  CheckCircle2, FileText, Tag, Code, Copy, ExternalLink, FileSpreadsheet, Table,
+  PackagePlus, PlusCircle
 } from 'lucide-react';
 
 interface AdminModalProps {
@@ -168,9 +171,178 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const [isAddingNewCategoryInline, setIsAddingNewCategoryInline] = useState(false);
   const [inlineNewCategoryName, setInlineNewCategoryName] = useState('');
 
-  // CSV products & HTML/JS embed modal states
+  // CSV products, deduplication & HTML/JS states
   const [showEmbedCodeModal, setShowEmbedCodeModal] = useState(false);
+  const [showCsvCleanerModal, setShowCsvCleanerModal] = useState(false);
   const [hasCopiedCode, setHasCopiedCode] = useState(false);
+  const [hasCopiedHtmlTable, setHasCopiedHtmlTable] = useState(false);
+  const [csvRawText, setCsvRawText] = useState('');
+  const [activeCsvSubTab, setActiveCsvSubTab] = useState<'current' | 'cleaner'>('current');
+  const [isImportingExtracted, setIsImportingExtracted] = useState(false);
+  const [cleanedCustomProducts, setCleanedCustomProducts] = useState<Array<{
+    title: string;
+    currentPrice: string;
+    oldPrice: string;
+    image: string;
+  }> | null>(null);
+  const [csvStats, setCsvStats] = useState<{
+    totalRows: number;
+    duplicatesRemoved: number;
+    uniqueCount: number;
+  } | null>(null);
+
+  // Helper function to robustly parse CSV text
+  const parseRawCSV = (text: string): string[][] => {
+    const lines: string[][] = [];
+    let row: string[] = [];
+    let inQuotes = false;
+    let currentStr = '';
+
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      const nextChar = text[i + 1];
+
+      if (char === '"') {
+        if (inQuotes && nextChar === '"') {
+          currentStr += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        row.push(currentStr.trim());
+        currentStr = '';
+      } else if ((char === '\r' || char === '\n') && !inQuotes) {
+        if (char === '\r' && nextChar === '\n') {
+          i++;
+        }
+        row.push(currentStr.trim());
+        currentStr = '';
+        if (row.length > 1 || (row.length === 1 && row[0] !== '')) {
+          lines.push(row);
+        }
+        row = [];
+      } else {
+        currentStr += char;
+      }
+    }
+    if (currentStr.length > 0 || row.length > 0) {
+      row.push(currentStr.trim());
+      lines.push(row);
+    }
+    return lines;
+  };
+
+  // Deduplicate products based on product name (data / item-title) and extract the 4 main columns
+  const handleProcessCsvDeduplication = (textToProcess: string) => {
+    if (!textToProcess || textToProcess.trim().length === 0) {
+      showNotice('⚠️ يرجى لصق بيانات CSV أو اختيار ملف أولاً.');
+      return;
+    }
+
+    try {
+      const parsed = parseRawCSV(textToProcess);
+      if (parsed.length <= 1) {
+        showNotice('⚠️ لم يتم العثور على أسطر صالحة في ملف الـ CSV.');
+        return;
+      }
+
+      const headers = parsed[0].map((h) => h.trim().toLowerCase());
+
+      // Auto-detect columns: Product Name, Current Price, Old Price, Main Image
+      let titleIdx = headers.indexOf('data');
+      if (titleIdx === -1) {
+        titleIdx = headers.findIndex((h) => h.includes('item-title') || h.includes('title') || h.includes('name'));
+      }
+
+      let currentPriceIdx = headers.indexOf('data2');
+      if (currentPriceIdx === -1) {
+        currentPriceIdx = headers.findIndex((h) => h.includes('woocommerce-price-amount 2') || h.includes('new_price') || h.includes('sale_price') || h.includes('price 2'));
+      }
+      if (currentPriceIdx === -1) {
+        currentPriceIdx = headers.findIndex((h) => h.includes('price') && !h.includes('regular') && !h.includes('old'));
+      }
+
+      let oldPriceIdx = headers.indexOf('data3');
+      if (oldPriceIdx === -1) {
+        oldPriceIdx = headers.findIndex((h) => h.includes('woocommerce-price-amount') && !h.includes('2'));
+      }
+      if (oldPriceIdx === -1) {
+        oldPriceIdx = headers.findIndex((h) => h.includes('old') || h.includes('regular'));
+      }
+
+      let imageIdx = headers.indexOf('image');
+      if (imageIdx === -1) {
+        imageIdx = headers.findIndex((h) => h.includes('thumbnail') || h.includes('img') || h.includes('src'));
+      }
+
+      if (titleIdx === -1) {
+        titleIdx = 0; // fallback to first column
+      }
+
+      const seen = new Map<string, { title: string; currentPrice: string; oldPrice: string; image: string }>();
+      let duplicatesCount = 0;
+
+      for (let i = 1; i < parsed.length; i++) {
+        const row = parsed[i];
+        if (!row || row.length === 0) continue;
+
+        const rawTitle = (row[titleIdx] || '').trim();
+        if (!rawTitle) continue;
+
+        const normalizedKey = rawTitle.toLowerCase().replace(/\s+/g, ' ');
+
+        if (seen.has(normalizedKey)) {
+          duplicatesCount++;
+          continue;
+        }
+
+        const currentPrice = currentPriceIdx !== -1 && row[currentPriceIdx] ? row[currentPriceIdx].trim() : '';
+        const oldPrice = oldPriceIdx !== -1 && row[oldPriceIdx] ? row[oldPriceIdx].trim() : '';
+        const image = imageIdx !== -1 && row[imageIdx] ? row[imageIdx].trim() : '';
+
+        seen.set(normalizedKey, {
+          title: rawTitle,
+          currentPrice,
+          oldPrice,
+          image
+        });
+      }
+
+      const uniqueResults = Array.from(seen.values());
+      setCleanedCustomProducts(uniqueResults);
+      setCsvStats({
+        totalRows: parsed.length - 1,
+        duplicatesRemoved: duplicatesCount,
+        uniqueCount: uniqueResults.length
+      });
+
+      showNotice(`✨ تم فحص ${parsed.length - 1} صف: تم حذف ${duplicatesCount} تكرار، واستخراج ${uniqueResults.length} منتج فريد بنجاح!`);
+    } catch (err: any) {
+      console.error('Error processing CSV:', err);
+      showNotice('حدث خطأ أثناء معالجة ملف الـ CSV.');
+    }
+  };
+
+  // Helper to trigger download of clean CSV with UTF-8 BOM
+  const downloadCleanCsvFile = (
+    productsToExport: Array<{ title: string; currentPrice: string; oldPrice: string; image: string }>,
+    fileName = 'cleaned_products.csv'
+  ) => {
+    let csv = '\uFEFF"Product Name","Current Price","Old Price","Main Image URL"\r\n';
+    for (const p of productsToExport) {
+      csv += `"${(p.title || '').replace(/"/g, '""')}","${(p.currentPrice || '').replace(/"/g, '""')}","${(p.oldPrice || '').replace(/"/g, '""')}","${(p.image || '').replace(/"/g, '""')}"\r\n`;
+    }
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   const handleImportCsvProducts = async () => {
     try {
@@ -1703,6 +1875,16 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                     <div className="flex items-center gap-2 flex-wrap">
                       <button
                         type="button"
+                        onClick={() => setShowCsvCleanerModal(true)}
+                        className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                        title="معالجة وتنظيف ملفات CSV وإزالة التكرار وتصدير الـ 4 أعمدة"
+                      >
+                        <FileSpreadsheet className="w-4 h-4 text-amber-600" />
+                        <span>معالج وتنظيف CSV (إزالة التكرار)</span>
+                      </button>
+
+                      <button
+                        type="button"
                         onClick={() => setShowEmbedCodeModal(true)}
                         className="px-3 py-2 bg-[#fdeaf1] hover:bg-[#f7dfe8] text-[#d94f86] rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                         title="عرض ونسخ كود HTML و JS للمنتجات"
@@ -1718,7 +1900,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                         title="استيراد منتجات الـ CSV إلى الكتالوج"
                       >
                         <UploadCloud className="w-4 h-4 text-emerald-600" />
-                        <span>استيراد الـ CSV (12 منتج)</span>
+                        <span>استيراد الـ CSV ({CSV_IMPORTED_PRODUCTS.length} منتج)</span>
                       </button>
 
                       <button
@@ -1757,6 +1939,340 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                       </button>
                     </div>
                   </div>
+
+                  {/* CSV Cleaner & Deduplication Modal */}
+                  {showCsvCleanerModal && (
+                    <div className="bg-white p-5 rounded-2xl border-2 border-amber-300 shadow-xl flex flex-col gap-5 animate-in fade-in">
+                      <div className="flex items-start justify-between border-b border-[#f7dfe8] pb-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                            <FileSpreadsheet className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h4 className="font-black text-sm text-[#4a2b3d] flex items-center gap-2">
+                              <span>أداة تنظيف بيانات CSV واستخراج الأعمدة الـ 4 مع إزالة التكرار</span>
+                              <span className="text-[10px] bg-amber-500 text-white px-2 py-0.5 rounded-full font-bold">UTF-8 Clean</span>
+                            </h4>
+                            <p className="text-[11px] text-[#8a6b7a]">
+                              حذف الصفوف المكررة الناتجة عن التصفح (Pagination) بناءً على اسم المنتج (data)، وتنظيم الأعمدة الأربعة الرئيسية: اسم المنتج، السعر الحالي (data2)، السعر القديم (data3)، والصورة (image).
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setShowCsvCleanerModal(false)}
+                          className="p-1.5 rounded-lg hover:bg-rose-50 text-[#8a6b7a] cursor-pointer"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Sub-Tabs: Current Cleaned Data vs Live Deduplication Tool */}
+                      <div className="flex items-center gap-2 border-b border-[#f7dfe8] pb-2">
+                        <button
+                          type="button"
+                          onClick={() => setActiveCsvSubTab('current')}
+                          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                            activeCsvSubTab === 'current'
+                              ? 'bg-amber-500 text-white shadow-xs'
+                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          }`}
+                        >
+                          <Table className="w-3.5 h-3.5" />
+                          <span>المنتجات الحالية المنظفة ({CSV_IMPORTED_PRODUCTS.length} منتج فريد)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveCsvSubTab('cleaner')}
+                          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                            activeCsvSubTab === 'cleaner'
+                              ? 'bg-amber-500 text-white shadow-xs'
+                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          }`}
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>تنظيف ملف أو بيانات CSV جديدة</span>
+                        </button>
+                      </div>
+
+                      {activeCsvSubTab === 'current' ? (
+                        <div className="flex flex-col gap-4">
+                          {/* Action Toolbar */}
+                          <div className="flex flex-wrap items-center justify-between gap-2.5 bg-amber-50/60 p-3 rounded-xl border border-amber-200/70">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const productsToExport = CSV_IMPORTED_PRODUCTS.map((p) => ({
+                                    title: p.title,
+                                    currentPrice: String(p.price),
+                                    oldPrice: String(p.originalPrice || ''),
+                                    image: p.images[0] || ''
+                                  }));
+                                  downloadCleanCsvFile(productsToExport, 'cleaned_products.csv');
+                                  showNotice('📥 تم بدء تحميل ملف cleaned_products.csv بترميز UTF-8 مع BOM!');
+                                }}
+                                className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                                <span>تحميل CSV نظيف (UTF-8 BOM)</span>
+                              </button>
+
+                              <a
+                                href="/cleaned_fassil.csv"
+                                download="cleaned_fassil.csv"
+                                className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer text-decoration-none"
+                                title="تحميل كتالوج fassil.shop المنظف (Title, Price, Title_URL, Image)"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                                <span>تحميل كتالوج fassil.shop المنظف (55 منتج)</span>
+                              </a>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  let tableHtml = `<table border="1" cellpadding="8" style="border-collapse:collapse;width:100%;font-family:sans-serif;text-align:right;">
+  <thead>
+    <tr style="background:#fdeaf1;">
+      <th>#</th>
+      <th>الصورة الرئيسية</th>
+      <th>اسم المنتج (Product Name)</th>
+      <th>السعر الحالي (Current Price)</th>
+      <th>السعر القديم (Old Price)</th>
+    </tr>
+  </thead>
+  <tbody>\n`;
+                                  CSV_IMPORTED_PRODUCTS.forEach((p, idx) => {
+                                    tableHtml += `    <tr>
+      <td>${idx + 1}</td>
+      <td><img src="${p.images[0]}" alt="${p.title}" width="50" height="50" style="object-fit:cover;border-radius:6px;" /></td>
+      <td><strong>${p.title}</strong></td>
+      <td style="color:#d94f86;font-weight:bold;">${p.price.toLocaleString()} د.ج</td>
+      <td style="text-decoration:line-through;color:#94a3b8;">${p.originalPrice ? p.originalPrice.toLocaleString() + ' د.ج' : '-'}</td>
+    </tr>\n`;
+                                  });
+                                  tableHtml += '  </tbody>\n</table>';
+                                  navigator.clipboard.writeText(tableHtml);
+                                  setHasCopiedHtmlTable(true);
+                                  setTimeout(() => setHasCopiedHtmlTable(false), 3000);
+                                  showNotice('📋 تم نسخ كود جدول الـ HTML بنجاح!');
+                                }}
+                                className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                              >
+                                {hasCopiedHtmlTable ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                                <span>{hasCopiedHtmlTable ? 'تم نسخ كود الجدول!' : 'نسخ كود جدول HTML'}</span>
+                              </button>
+
+                              <a
+                                href="/products-catalog.html"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                                <span>معاينة صفحة الكتالوج والجدول</span>
+                              </a>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 text-[11px] font-bold text-amber-900 bg-amber-100/70 px-2.5 py-1 rounded-lg">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>{CSV_IMPORTED_PRODUCTS.length} منتج فريد (تم تصفية وحذف التكرارات)</span>
+                            </div>
+                          </div>
+
+                          {/* 4-Columns Clean Table */}
+                          <div className="overflow-x-auto rounded-xl border border-[#f7dfe8]">
+                            <table className="w-full text-right text-xs">
+                              <thead>
+                                <tr className="bg-[#fff0f5] text-[#4a2b3d] font-black border-b border-[#f7dfe8]">
+                                  <th className="p-2.5 w-10 text-center">#</th>
+                                  <th className="p-2.5 w-16">الصورة</th>
+                                  <th className="p-2.5">اسم المنتج (Product Name - من data)</th>
+                                  <th className="p-2.5 w-32">السعر الحالي (data2)</th>
+                                  <th className="p-2.5 w-32">السعر القديم (data3)</th>
+                                  <th className="p-2.5 w-20 text-center">الخصم</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-[#f7dfe8]">
+                                {CSV_IMPORTED_PRODUCTS.map((prod, idx) => {
+                                  const discount = prod.originalPrice && prod.originalPrice > prod.price
+                                    ? Math.round(((prod.originalPrice - prod.price) / prod.originalPrice) * 100)
+                                    : 0;
+                                  return (
+                                    <tr key={prod.id} className="hover:bg-[#fff9fb] transition-colors">
+                                      <td className="p-2.5 text-center font-bold text-[#8a6b7a]">{idx + 1}</td>
+                                      <td className="p-2.5">
+                                        <img
+                                          src={prod.images[0]}
+                                          alt={prod.title}
+                                          className="w-10 h-10 rounded-lg object-cover border border-[#f7dfe8]"
+                                        />
+                                      </td>
+                                      <td className="p-2.5">
+                                        <span className="font-bold text-[#4a2b3d] block leading-snug">{prod.title}</span>
+                                        <span className="text-[10px] text-amber-700 font-semibold">{prod.brandName}</span>
+                                      </td>
+                                      <td className="p-2.5 font-black text-[#d94f86] whitespace-nowrap">
+                                        {prod.price.toLocaleString()} د.ج
+                                      </td>
+                                      <td className="p-2.5 text-slate-400 line-through whitespace-nowrap">
+                                        {prod.originalPrice ? `${prod.originalPrice.toLocaleString()} د.ج` : '-'}
+                                      </td>
+                                      <td className="p-2.5 text-center">
+                                        {discount > 0 ? (
+                                          <span className="bg-rose-100 text-rose-700 font-bold px-1.5 py-0.5 rounded text-[10px]">
+                                            -{discount}%
+                                          </span>
+                                        ) : (
+                                          <span className="text-slate-300">-</span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Cleaner Tab for New Scraped CSV Files */
+                        <div className="flex flex-col gap-4">
+                          <div className="bg-[#fffbf0] p-3.5 rounded-xl border border-amber-200 flex flex-col gap-2">
+                            <span className="font-bold text-xs text-amber-900">
+                              📋 الصق كود أو نصوص CSV المسحوبة هنا، أو ارفع ملف .csv لتنظيفه وحذف التكرار تلقائياً:
+                            </span>
+                            <textarea
+                              rows={5}
+                              value={csvRawText}
+                              onChange={(e) => setCsvRawText(e.target.value)}
+                              placeholder={`الصق بيانات الـ CSV هنا... يدعم الأعمدة: "data", "data2", "data3", "image" أو أعمدة WooCommerce...`}
+                              className="w-full text-[11px] p-2.5 font-mono border border-amber-300 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-amber-500 bg-white"
+                              dir="ltr"
+                            />
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <div className="flex items-center gap-2">
+                                <label className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-lg text-xs font-bold cursor-pointer flex items-center gap-1.5">
+                                  <Upload className="w-3.5 h-3.5" />
+                                  <span>رفع ملف .csv من جهازك</span>
+                                  <input
+                                    type="file"
+                                    accept=".csv,text/csv"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        const reader = new FileReader();
+                                        reader.onload = (evt) => {
+                                          const text = evt.target?.result as string;
+                                          if (text) {
+                                            setCsvRawText(text);
+                                            handleProcessCsvDeduplication(text);
+                                          }
+                                        };
+                                        reader.readAsText(file, 'utf-8');
+                                      }
+                                    }}
+                                  />
+                                </label>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleProcessCsvDeduplication(csvRawText);
+                                  }}
+                                  className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                                >
+                                  <Sparkles className="w-3.5 h-3.5" />
+                                  <span>تنظيف البيانات وحذف التكرار</span>
+                                </button>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const sample = `"item-thumb href","attachment-woocommerce_thumbnail src","item-title","woocommerce-Price-amount","woocommerce-Price-amount 2"
+"https://fassil.shop/product/cafetera-delonghi-magnifica-s-smart/","https://i0.wp.com/fassil.shop/wp-content/uploads/2025/12/FASSIL-SHOP-09-6-scaled.jpg?resize=630%2C630&ssl=1","CAFETERA DELONGHI MAGNIFICA S SMART COMPLETAMENTE AUTOMÁTICA ECAM 250.23.SB [Classe énergétique A+]","139000","124000"
+"https://fassil.shop/product/cafetiere-filtre-smeg-bleu-azur/","https://i0.wp.com/fassil.shop/wp-content/uploads/2025/03/DCF02PBEU.jpg?resize=630%2C630&ssl=1","CAFETIÈRE FILTRE SMEG BLEU AZUR 1.4L 10 TASSES DCF02PBEU","64000","51000"
+"https://fassil.shop/product/cafetiere-filtre-smeg-bleu-azur/","https://i0.wp.com/fassil.shop/wp-content/uploads/2025/03/DCF02PBEU.jpg?resize=630%2C630&ssl=1","CAFETIÈRE FILTRE SMEG BLEU AZUR 1.4L 10 TASSES DCF02PBEU","64000","51000"`;
+                                  setCsvRawText(sample);
+                                  handleProcessCsvDeduplication(sample);
+                                }}
+                                className="text-[11px] text-amber-800 underline font-semibold hover:text-amber-950"
+                              >
+                                تجربة نموذج مع تكرار تجريبي
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Stats and Results Preview */}
+                          {csvStats && cleanedCustomProducts && (
+                            <div className="flex flex-col gap-3 animate-in fade-in">
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center text-xs">
+                                <div className="bg-slate-100 p-2 rounded-lg">
+                                  <span className="text-slate-500 block text-[10px]">إجمالي الصفوف المدخلة</span>
+                                  <strong className="text-sm font-black text-slate-800">{csvStats.totalRows} صف</strong>
+                                </div>
+                                <div className="bg-rose-50 p-2 rounded-lg border border-rose-200">
+                                  <span className="text-rose-600 block text-[10px]">صفوف مكررة تم حذفها</span>
+                                  <strong className="text-sm font-black text-rose-700">🗑️ {csvStats.duplicatesRemoved} تكرار</strong>
+                                </div>
+                                <div className="bg-emerald-50 p-2 rounded-lg border border-emerald-200">
+                                  <span className="text-emerald-700 block text-[10px]">منتجات فريدة مستخرجة</span>
+                                  <strong className="text-sm font-black text-emerald-800">✨ {csvStats.uniqueCount} منتج فريد</strong>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-bold text-xs text-[#4a2b3d]">
+                                  معاينة البيانات المنظفة ({cleanedCustomProducts.length} منتج فريد):
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => downloadCleanCsvFile(cleanedCustomProducts, 'custom_cleaned_products.csv')}
+                                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                  <span>تصدير CSV نظيف بترميز UTF-8</span>
+                                </button>
+                              </div>
+
+                              <div className="max-h-60 overflow-y-auto rounded-xl border border-slate-200">
+                                <table className="w-full text-right text-xs">
+                                  <thead className="sticky top-0 bg-slate-100 font-bold border-b border-slate-200">
+                                    <tr>
+                                      <th className="p-2 w-8">#</th>
+                                      <th className="p-2 w-12">الصورة</th>
+                                      <th className="p-2">اسم المنتج (Product Name)</th>
+                                      <th className="p-2 w-28">السعر الحالي</th>
+                                      <th className="p-2 w-28">السعر القديم</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-100">
+                                    {cleanedCustomProducts.map((item, idx) => (
+                                      <tr key={idx} className="hover:bg-slate-50">
+                                        <td className="p-2 text-slate-400 font-bold">{idx + 1}</td>
+                                        <td className="p-2">
+                                          {item.image ? (
+                                            <img src={item.image} alt={item.title} className="w-8 h-8 rounded object-cover border border-slate-200" />
+                                          ) : (
+                                            <span className="text-slate-300">-</span>
+                                          )}
+                                        </td>
+                                        <td className="p-2 font-medium text-slate-800">{item.title}</td>
+                                        <td className="p-2 font-bold text-[#d94f86]">{item.currentPrice || '-'}</td>
+                                        <td className="p-2 text-slate-400 line-through">{item.oldPrice || '-'}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* HTML / JS Code Embed Modal */}
                   {showEmbedCodeModal && (

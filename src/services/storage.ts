@@ -1,5 +1,6 @@
 import { Order, BeautyProduct, OrderStatus, CustomerReview, ProductCategory } from '../types';
 import { ROZA_BEAUTY_PRODUCT, INITIAL_STORE_PRODUCTS } from '../data/products';
+import { DEFAULT_CATEGORIES } from '../data/categories';
 import { ALGERIAN_CUSTOMER_REVIEWS } from '../data/reviews';
 
 export const STORAGE_ORDERS_KEY = 'roza_orders';
@@ -350,17 +351,34 @@ export function getStoredCatalogProducts(): BeautyProduct[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        // Automatically merge any newly introduced products (such as the CSV-imported coffee machines)
+        // Map of standard initial products
+        const initialMap = new Map(INITIAL_STORE_PRODUCTS.map((p) => [p.id, p]));
         const existingIds = new Set(parsed.map((p) => p.id));
-        let hasNew = false;
-        const merged = [...parsed];
+        let changed = false;
+
+        // Update any existing initial product with latest specs/images/category
+        const merged = parsed.map((p) => {
+          const fresh = initialMap.get(p.id);
+          if (fresh) {
+            return {
+              ...fresh,
+              isVisible: p.isVisible ?? fresh.isVisible,
+              isFeatured: p.isFeatured ?? fresh.isFeatured,
+              stockCount: p.stockCount ?? fresh.stockCount,
+            };
+          }
+          return p;
+        });
+
+        // Add any newly introduced products
         for (const item of INITIAL_STORE_PRODUCTS) {
           if (!existingIds.has(item.id)) {
             merged.push(item);
-            hasNew = true;
+            changed = true;
           }
         }
-        if (hasNew) {
+
+        if (changed || merged.length !== parsed.length) {
           saveStoredCatalogProducts(merged);
         }
         return merged;
@@ -396,13 +414,26 @@ export function getStoredCategories(): ProductCategory[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        const existingIds = new Set(parsed.map(c => c.id));
+        let changed = false;
+        const merged = [...parsed];
+        for (const def of DEFAULT_CATEGORIES) {
+          if (!existingIds.has(def.id)) {
+            merged.push(def);
+            changed = true;
+          }
+        }
+        if (changed) {
+          saveStoredCategories(merged);
+        }
+        return merged;
       }
     }
   } catch (e) {
     console.error('Failed to load categories from storage:', e);
   }
-  return [];
+  saveStoredCategories(DEFAULT_CATEGORIES);
+  return DEFAULT_CATEGORIES;
 }
 
 export function saveStoredCategories(categories: ProductCategory[]): void {

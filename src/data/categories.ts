@@ -2,44 +2,52 @@ import { ProductCategory, StoreBanner } from '../types';
 
 export const DEFAULT_CATEGORIES: ProductCategory[] = [
   {
-    id: 'cat-coffee-machines',
-    name: 'ماكينات القهوة والاسبريسو',
-    slug: 'coffee-machines',
-    description: 'أفخم ماكينات القهوة والاسبريسو الإيطالية الأصلية DeLonghi و SMEG',
-    icon: 'Coffee',
+    id: 'cat-kitchen',
+    name: 'أجهزة المطبخ',
+    slug: 'kitchen-appliances',
+    description: 'المقالي الهوائية، الخلاطات، العجانات، صانعات القهوة ومعدات المطبخ الذكية',
+    icon: 'UtensilsCrossed',
     order: 1
   },
   {
-    id: 'cat-appliances',
-    name: 'أجهزة العناية والمنزل',
+    id: 'cat-home',
+    name: 'الأجهزة الكهرومنزلية',
     slug: 'home-appliances',
-    description: 'أفضل أجهزة التنظيف الذكية والعناية المنزلية العصرية',
+    description: 'المكانس الذكية، أجهزة التنظيف بالبخار، روبوتات المسابح والأجهزة المنزلية',
     icon: 'Sparkles',
     order: 2
   },
   {
-    id: 'cat-hair-beauty',
-    name: 'تصفيف وجمال الشعر',
-    slug: 'hair-beauty',
-    description: 'مصففات ومجففات الشعر الاحترافية بتقنيات السيراميك والأيونات',
-    icon: 'Flame',
-    order: 2
-  },
-  {
-    id: 'cat-skincare',
-    name: 'العناية بالبشرة والوجه',
-    slug: 'skincare',
-    description: 'أجهزة تنظيف وتقشير البشرة ومساج الوجه',
+    id: 'cat-beauty',
+    name: 'العناية والتجميل',
+    slug: 'beauty-personal-care',
+    description: 'مصففات ومجففات الشعر، أجهزة إزالة الشعر بالليزر، وماكينات الحلاقة والعناية الشخصية',
     icon: 'Heart',
     order: 3
   },
   {
-    id: 'cat-accessories',
-    name: 'الملحقات وقطع الغيار',
-    slug: 'accessories',
-    description: 'السوائل والفرش والملحقات الأصلية لجميع الأجهزة',
-    icon: 'Package',
+    id: 'cat-electronics',
+    name: 'إلكترونيات وألعاب',
+    slug: 'electronics-gaming',
+    description: 'السكوترات الكهربائية، منصات الألعاب، والأجهزة الإلكترونية الذكية',
+    icon: 'Smartphone',
     order: 4
+  },
+  {
+    id: 'cat-coffee-machines',
+    name: 'ماكينات القهوة والاسبريسو',
+    slug: 'coffee-machines',
+    description: 'أفخم ماكينات القهوة والاسبريسو العالمية الأصلية: BOSCH, SIEMENS, SMEG, Sage, DeLonghi',
+    icon: 'Coffee',
+    order: 5
+  },
+  {
+    id: 'cat-general',
+    name: 'عام',
+    slug: 'general',
+    description: 'المنتجات والإكسسوارات العامة والملحقات',
+    icon: 'Package',
+    order: 6
   }
 ];
 

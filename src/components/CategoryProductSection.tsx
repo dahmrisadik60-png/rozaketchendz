@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Sparkles } from 'lucide-react';
+import { ArrowLeft, Sparkles, UtensilsCrossed, Home, Heart, Smartphone, Coffee, Package } from 'lucide-react';
 import { BeautyProduct, ProductCategory } from '../types';
 import { ProductCard } from './ProductCard';
 
@@ -17,6 +17,25 @@ export const CategoryProductSection: React.FC<CategoryProductSectionProps> = ({
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+
+  const renderCategoryIcon = (iconName?: string) => {
+    switch (iconName) {
+      case 'UtensilsCrossed':
+        return <UtensilsCrossed className="w-4 h-4 sm:w-5 sm:h-5 text-[#d94f86]" />;
+      case 'Home':
+        return <Home className="w-4 h-4 sm:w-5 sm:h-5 text-[#d94f86]" />;
+      case 'Heart':
+        return <Heart className="w-4 h-4 sm:w-5 sm:h-5 text-[#d94f86]" />;
+      case 'Smartphone':
+        return <Smartphone className="w-4 h-4 sm:w-5 sm:h-5 text-[#d94f86]" />;
+      case 'Coffee':
+        return <Coffee className="w-4 h-4 sm:w-5 sm:h-5 text-[#d94f86]" />;
+      case 'Package':
+        return <Package className="w-4 h-4 sm:w-5 sm:h-5 text-[#d94f86]" />;
+      default:
+        return <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-[#d94f86]" />;
+    }
+  };
 
   // Track active slide index on horizontal scroll
   const handleScroll = () => {
@@ -55,7 +74,7 @@ export const CategoryProductSection: React.FC<CategoryProductSectionProps> = ({
       <div className="flex items-center justify-between pb-2 border-b border-[#f7dfe8]">
         <div>
           <h2 className="text-lg sm:text-2xl font-black text-[#4a2b3d] flex items-center gap-2">
-            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-[#d94f86]" />
+            {renderCategoryIcon(category.icon)}
             <span>{category.name}</span>
           </h2>
           {category.description && (
