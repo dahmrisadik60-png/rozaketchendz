@@ -8,43 +8,129 @@ export interface CategoryDef {
 }
 
 export const CATEGORY_DEFINITIONS: Record<string, CategoryDef> = {
-  KITCHEN: {
-    id: 'cat-kitchen',
-    name: 'أجهزة المطبخ',
-    nameEn: 'Kitchen Appliances',
-    slug: 'kitchen-appliances'
-  },
-  HOME: {
-    id: 'cat-home',
-    name: 'الأجهزة الكهرومنزلية',
-    nameEn: 'Home Appliances',
-    slug: 'home-appliances'
-  },
-  BEAUTY: {
-    id: 'cat-beauty',
-    name: 'العناية والتجميل',
-    nameEn: 'Beauty & Personal Care',
-    slug: 'beauty-personal-care'
-  },
-  ELECTRONICS: {
-    id: 'cat-electronics',
-    name: 'إلكترونيات وألعاب',
-    nameEn: 'Electronics & Gaming',
-    slug: 'electronics-gaming'
-  },
   COFFEE: {
     id: 'cat-coffee-machines',
     name: 'ماكينات القهوة والاسبريسو',
     nameEn: 'Coffee & Espresso Machines',
     slug: 'coffee-machines'
   },
+  HOME: {
+    id: 'cat-home',
+    name: 'المكانس والروبوتات الذكية',
+    nameEn: 'Vacuums & Smart Robots',
+    slug: 'home-appliances'
+  },
+  STEAM: {
+    id: 'cat-steam',
+    name: 'التنظيف بالبخار وغسل السجاد',
+    nameEn: 'Steam & Carpet Cleaning',
+    slug: 'steam-cleaners'
+  },
+  POOL: {
+    id: 'cat-pool',
+    name: 'روبوتات ومعدات المسابح',
+    nameEn: 'Pool Robots & Equipment',
+    slug: 'pool-robots'
+  },
+  AIRFRYER: {
+    id: 'cat-airfryers',
+    name: 'المقالي الهوائية والطباخات المتعددة',
+    nameEn: 'Air Fryers & Multicookers',
+    slug: 'air-fryers'
+  },
+  BLENDER: {
+    id: 'cat-blenders',
+    name: 'الخلاطات والمفرومات والعصارات',
+    nameEn: 'Blenders, Choppers & Juicers',
+    slug: 'blenders-juicers'
+  },
+  FOODPROC: {
+    id: 'cat-food-processors',
+    name: 'روبوتات الطبخ والعجانات',
+    nameEn: 'Food Processors & Dough Machines',
+    slug: 'food-processors'
+  },
+  GRILL: {
+    id: 'cat-grills',
+    name: 'الشوايات والبلانشا والطبخ الكهربائي',
+    nameEn: 'Grills, Plancha & Electric Cooking',
+    slug: 'grills-cooking'
+  },
+  BREAKFAST: {
+    id: 'cat-breakfast',
+    name: 'الغلايات والمحمصات وأجهزة الفطور',
+    nameEn: 'Kettles, Toasters & Breakfast',
+    slug: 'kettles-toasters'
+  },
+  COOKWARE: {
+    id: 'cat-cookware',
+    name: 'أواني الطبخ والطناجر والسكاكين',
+    nameEn: 'Cookware & Knives',
+    slug: 'cookware'
+  },
+  ICE: {
+    id: 'cat-ice',
+    name: 'المثلجات والمشروبات الباردة',
+    nameEn: 'Ice Cream & Cold Drinks',
+    slug: 'ice-cold-drinks'
+  },
+  LARGE: {
+    id: 'cat-large',
+    name: 'الأفران والأجهزة الكبيرة والتدفئة',
+    nameEn: 'Ovens & Large Appliances',
+    slug: 'large-appliances'
+  },
+  HAIR: {
+    id: 'cat-hair',
+    name: 'العناية بالشعر والتصفيف',
+    nameEn: 'Hair Care & Styling',
+    slug: 'hair-beauty'
+  },
+  BEAUTY: {
+    id: 'cat-beauty',
+    name: 'الحلاقة والإزالة والعناية الشخصية',
+    nameEn: 'Shaving, Hair Removal & Personal Care',
+    slug: 'beauty-personal-care'
+  },
+  IRON: {
+    id: 'cat-iron',
+    name: 'الكي والخياطة',
+    nameEn: 'Ironing & Sewing',
+    slug: 'ironing-sewing'
+  },
+  ELECTRONICS: {
+    id: 'cat-electronics',
+    name: 'إلكترونيات ورياضة وأطفال',
+    nameEn: 'Electronics, Sports & Kids',
+    slug: 'electronics-gaming'
+  },
+  PARTS: {
+    id: 'cat-parts',
+    name: 'قطع غيار وإكسسوارات',
+    nameEn: 'Spare Parts & Accessories',
+    slug: 'spare-parts'
+  },
   GENERAL: {
     id: 'cat-general',
     name: 'عام',
     nameEn: 'General',
     slug: 'general'
+  },
+  KITCHEN: {
+    id: 'cat-blenders',
+    name: 'الخلاطات والمفرومات والعصارات',
+    nameEn: 'Blenders, Choppers & Juicers',
+    slug: 'blenders-juicers'
   }
 };
+
+/**
+ * Finds a category definition from its Arabic name (the `category` field of fassilProducts.json).
+ */
+export function getCategoryByName(name?: string): CategoryDef | undefined {
+  if (!name) return undefined;
+  return Object.values(CATEGORY_DEFINITIONS).find((c) => c.name === name.trim());
+}
 
 /**
  * Classifies a product title into one of the designated categories based on keywords.
@@ -276,7 +362,7 @@ export function transformToActiveProduct(
   index: number
 ): BeautyProduct {
   const title = (item.title || '').trim();
-  const catDef = classifyProductTitle(title);
+  const catDef = getCategoryByName(item.category) || classifyProductTitle(title);
   const brand = extractBrand(title);
   const parsedPrice = parseNumericPrice(item.currentPrice || item.price) || 25000;
   const parsedOldPrice = parseNumericPrice(item.oldPrice);

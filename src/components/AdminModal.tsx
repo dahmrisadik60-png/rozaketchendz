@@ -56,7 +56,7 @@ import {
   subscribeToAdSpend
 } from '../services/firebase';
 import { AiInsightsTab } from './AiInsightsTab';
-import { DEFAULT_BANNER } from '../data/categories';
+import { DEFAULT_BANNER, DEFAULT_CATEGORIES } from '../data/categories';
 import { ROZA_BEAUTY_PRODUCT } from '../data/products';
 import { CSV_IMPORTED_PRODUCTS } from '../data/importedProducts';
 import { FASSIL_RAW_PRODUCTS, FASSIL_STORE_PRODUCTS } from '../data/fassilCatalog';
@@ -342,6 +342,64 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const [isImportingFassil, setIsImportingFassil] = useState(false);
+
+  // Imports the full categorized fassil.shop catalog (src/data/fassilProducts.json)
+  // into the store: syncs the categories first, then adds every product that is not there yet.
+  const handleImportFassilCatalog = async () => {
+    if (isImportingFassil) return;
+    setIsImportingFassil(true);
+    try {
+      // 1) Sync categories: default ones are inserted/updated by id, the obsolete empty "kitchen" one is dropped
+      const defaultIds = new Set(DEFAULT_CATEGORIES.map((c) => c.id));
+      const usedSlugs = new Set(localProductsList.map((p) => p.categorySlug));
+      const kept = localCategoriesList.filter((c) => {
+        if (defaultIds.has(c.id)) return false;
+        if (c.id === 'cat-kitchen' && !usedSlugs.has(c.slug)) return false;
+        return true;
+      });
+      const nextCats = [...DEFAULT_CATEGORIES, ...kept];
+      setLocalCategoriesList(nextCats);
+      saveStoredCategories(nextCats);
+      onCategoriesUpdated?.(nextCats);
+      for (const cat of DEFAULT_CATEGORIES) {
+        await saveCategory(cat).catch(console.warn);
+      }
+      if (localCategoriesList.some((c) => c.id === 'cat-kitchen') && !usedSlugs.has('kitchen-appliances')) {
+        await deleteCategory('cat-kitchen').catch(console.warn);
+      }
+
+      // 2) Add the products that are not in the catalog yet
+      const existingIds = new Set(localProductsList.map((p) => p.id));
+      const newlyAdded = FASSIL_STORE_PRODUCTS.filter((p) => !existingIds.has(p.id));
+
+      if (newlyAdded.length === 0) {
+        showNotice('ℹ️ كل منتجات كتالوج fassil موجودة بالفعل في متجرك، وتم تحديث الأقسام.');
+        return;
+      }
+
+      const merged = [...localProductsList, ...newlyAdded];
+      setLocalProductsList(merged);
+      saveStoredCatalogProducts(merged);
+      onProductsUpdated?.(merged);
+
+      // Write to Firestore in small parallel batches so the browser is not flooded
+      const BATCH = 25;
+      for (let i = 0; i < newlyAdded.length; i += BATCH) {
+        const chunk = newlyAdded.slice(i, i + BATCH);
+        await Promise.all(chunk.map((prod) => saveCatalogProduct(prod).catch(() => {})));
+        showNotice(`⏳ جاري حفظ المنتجات... ${Math.min(i + BATCH, newlyAdded.length)} / ${newlyAdded.length}`);
+      }
+
+      showNotice(`✅ تم استيراد ${newlyAdded.length} منتج موزعة على ${DEFAULT_CATEGORIES.length} قسم!`);
+    } catch (err) {
+      console.error('Error importing fassil catalog:', err);
+      showNotice('حدث خطأ أثناء استيراد كتالوج fassil.');
+    } finally {
+      setIsImportingFassil(false);
+    }
   };
 
   const handleImportCsvProducts = async () => {
@@ -1891,6 +1949,17 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                       >
                         <Code className="w-4 h-4" />
                         <span>كود HTML / JS</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleImportFassilCatalog}
+                        disabled={isImportingFassil}
+                        className="px-3 py-2 bg-pink-50 hover:bg-pink-100 text-pink-800 border border-pink-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60"
+                        title="استيراد كتالوج fassil.shop المصنف حسب الأقسام"
+                      >
+                        <UploadCloud className="w-4 h-4 text-pink-600" />
+                        <span>{isImportingFassil ? 'جاري الاستيراد...' : `استيراد كتالوج fassil (${FASSIL_STORE_PRODUCTS.length} منتج)`}</span>
                       </button>
 
                       <button
