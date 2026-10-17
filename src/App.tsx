@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { 
   BeautyProduct, 
@@ -45,6 +45,7 @@ import { CheckoutPage } from './pages/CheckoutPage';
 
 import { DEFAULT_CATEGORIES, DEFAULT_BANNER } from './data/categories';
 import { ROZA_BEAUTY_PRODUCT } from './data/products';
+import { FASSIL_STORE_PRODUCTS } from './data/fassilCatalog';
 
 export default function App() {
   const [product, setProduct] = useState<BeautyProduct | null>(null);
@@ -194,7 +195,19 @@ export default function App() {
   };
 
   const activeProduct = product || ROZA_BEAUTY_PRODUCT;
-  const currentCatalog = productsList.length > 0 ? productsList : [activeProduct];
+  // The categorized fassil.shop catalog (src/data/fassilProducts.json) ships with the site:
+  // products already saved in Firestore win, the rest are added automatically.
+  const currentCatalog = useMemo(() => {
+    const base = productsList.length > 0 ? productsList : [activeProduct];
+    const ids = new Set(base.map((p) => p.id));
+    return [...base, ...FASSIL_STORE_PRODUCTS.filter((p) => !ids.has(p.id))];
+  }, [productsList, activeProduct]);
+
+  // Same for categories: make sure every default category exists even if Firestore has an older list
+  const currentCategories = useMemo(() => {
+    const slugs = new Set(categories.map((c) => c.slug));
+    return [...categories, ...DEFAULT_CATEGORIES.filter((c) => !slugs.has(c.slug))];
+  }, [categories]);
 
   return (
     <BrowserRouter>
@@ -203,7 +216,7 @@ export default function App() {
           {/* Official Header with Search, Cart Counter, Favorites, 0777413872 */}
           <Header
             onOpenAdminPrompt={() => setIsAdminOpen(true)}
-            categories={categories}
+            categories={currentCategories}
           />
 
           {/* Slideout Cart Drawer */}
@@ -218,7 +231,7 @@ export default function App() {
                 element={
                   <HomePage
                     products={currentCatalog}
-                    categories={categories}
+                    categories={currentCategories}
                     banner={banner}
                     onDirectOrder={handleOpenDirectOrder}
                   />
@@ -244,7 +257,7 @@ export default function App() {
                 element={
                   <CategoryPage
                     products={currentCatalog}
-                    categories={categories}
+                    categories={currentCategories}
                     onDirectOrder={handleOpenDirectOrder}
                   />
                 }
@@ -259,7 +272,7 @@ export default function App() {
                 element={
                   <HomePage
                     products={currentCatalog}
-                    categories={categories}
+                    categories={currentCategories}
                     banner={banner}
                     onDirectOrder={handleOpenDirectOrder}
                   />
@@ -304,7 +317,7 @@ export default function App() {
             onReviewsUpdated={handleReviewsUpdated}
             products={currentCatalog}
             onProductsUpdated={handleCatalogUpdated}
-            categories={categories}
+            categories={currentCategories}
             onCategoriesUpdated={handleCategoriesUpdated}
             banner={banner}
           />
@@ -312,7 +325,7 @@ export default function App() {
           {/* Official Footer with 0777413872 contact & 69 wilayas */}
           <Footer 
             onOpenAdminPrompt={() => setIsAdminOpen(true)} 
-            categories={categories}
+            categories={currentCategories}
           />
         </div>
       </CartProvider>
