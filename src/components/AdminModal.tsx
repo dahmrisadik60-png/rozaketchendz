@@ -371,16 +371,40 @@ export const AdminModal: React.FC<AdminModalProps> = ({
         await deleteCategory('cat-kitchen').catch(console.warn);
       }
 
-      // 2) Add the products that are not in the catalog yet
-      const existingIds = new Set(localProductsList.map((p) => p.id));
-      const newlyAdded = FASSIL_STORE_PRODUCTS.filter((p) => !existingIds.has(p.id));
+      // 2) Save to Firestore only the fassil products that are NOT saved there yet,
+      //    so manual edits already stored in Firestore are never overwritten.
+      //    (The list shown in admin already contains the built-in catalog, so we read Firestore itself.)
+      const firestoreIds = await new Promise<Set<string>>((resolve) => {
+        let unsub: (() => void) | undefined;
+        let done = false;
+        const finish = (ids: Set<string>) => {
+          if (done) return;
+          done = true;
+          unsub?.();
+          resolve(ids);
+        };
+        const timer = setTimeout(() => finish(new Set(localProductsList.map((p) => p.id))), 8000);
+        unsub = subscribeToProducts(
+          (all) => {
+            clearTimeout(timer);
+            finish(new Set(all.map((p) => p.id)));
+          },
+          () => {
+            clearTimeout(timer);
+            finish(new Set(localProductsList.map((p) => p.id)));
+          }
+        );
+        if (done) unsub?.();
+      });
+      const newlyAdded = FASSIL_STORE_PRODUCTS.filter((p) => !firestoreIds.has(p.id));
 
       if (newlyAdded.length === 0) {
-        showNotice('ℹ️ كل منتجات كتالوج fassil موجودة بالفعل في متجرك، وتم تحديث الأقسام.');
+        showNotice('ℹ️ كل منتجات كتالوج fassil محفوظة بالفعل في Firebase، وتم تحديث الأقسام.');
         return;
       }
 
-      const merged = [...localProductsList, ...newlyAdded];
+      const localIds = new Set(localProductsList.map((p) => p.id));
+      const merged = [...localProductsList, ...newlyAdded.filter((p) => !localIds.has(p.id))];
       setLocalProductsList(merged);
       saveStoredCatalogProducts(merged);
       onProductsUpdated?.(merged);
