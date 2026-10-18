@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Order, 
   OrderStatus, 
@@ -70,7 +70,7 @@ import {
   Star, Heart, Sparkles, Award, ListPlus, Image as ImageIcon, ShieldCheck,
   Layers, LayoutTemplate, Edit, Eye, EyeOff, Smartphone, Monitor, UploadCloud,
   CheckCircle2, FileText, Tag, Code, Copy, ExternalLink, FileSpreadsheet, Table,
-  PackagePlus, PlusCircle
+  PackagePlus, PlusCircle, Filter
 } from 'lucide-react';
 
 interface AdminModalProps {
@@ -88,6 +88,18 @@ interface AdminModalProps {
   onCategoriesUpdated?: (updatedCategories: ProductCategory[]) => void;
   banner?: StoreBanner;
 }
+
+// Helper to normalize Arabic and Latin text for instant, accurate real-time filtering
+const normalizeSearchText = (text: string): string => {
+  if (!text) return '';
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/[\u064B-\u065F\u0670]/g, ''); // strip Arabic tashkeel / harakat
+};
 
 export const AdminModal: React.FC<AdminModalProps> = ({
   isOpen,
@@ -170,6 +182,44 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   // Form helpers for catalog product categories
   const [isAddingNewCategoryInline, setIsAddingNewCategoryInline] = useState(false);
   const [inlineNewCategoryName, setInlineNewCategoryName] = useState('');
+
+  // Products Catalog Search & Filtering states
+  const [productSearchQuery, setProductSearchQuery] = useState('');
+  const [productCategoryFilter, setProductCategoryFilter] = useState<string>('all');
+  const [productsViewMode, setProductsViewMode] = useState<'grid' | 'table'>('table');
+  const productEditorSectionRef = useRef<HTMLDivElement>(null);
+
+  // Real-time lightning-fast filtered products list (memorized O(n))
+  const filteredProductsList = useMemo(() => {
+    const query = normalizeSearchText(productSearchQuery);
+    return localProductsList.filter((prod) => {
+      // 1. Category Filter check
+      if (productCategoryFilter !== 'all') {
+        const matchesCat = 
+          prod.categoryId === productCategoryFilter || 
+          prod.categorySlug === productCategoryFilter ||
+          prod.categoryName === productCategoryFilter;
+        if (!matchesCat) return false;
+      }
+
+      // 2. Search Query check (matches Title, Category, Brand, Tagline)
+      if (!query) return true;
+
+      const normTitle = normalizeSearchText(prod.title || '');
+      const normCategory = normalizeSearchText(prod.categoryName || '');
+      const normCategorySlug = normalizeSearchText(prod.categorySlug || '');
+      const normBrand = normalizeSearchText(prod.brandName || '');
+      const normTagline = normalizeSearchText(prod.tagline || '');
+
+      return (
+        normTitle.includes(query) ||
+        normCategory.includes(query) ||
+        normCategorySlug.includes(query) ||
+        normBrand.includes(query) ||
+        normTagline.includes(query)
+      );
+    });
+  }, [localProductsList, productSearchQuery, productCategoryFilter]);
 
   // CSV products, deduplication & HTML/JS states
   const [showEmbedCodeModal, setShowEmbedCodeModal] = useState(false);
@@ -2645,7 +2695,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
 
                   {/* Product Form Modal / Section */}
                   {editingProduct && (
-                    <div className="bg-white p-5 rounded-2xl border-2 border-[#f7dfe8] shadow-md flex flex-col gap-4 animate-in fade-in">
+                    <div ref={productEditorSectionRef} className="bg-white p-5 rounded-2xl border-2 border-[#f7dfe8] shadow-md flex flex-col gap-4 animate-in fade-in">
                       <div className="flex items-center justify-between border-b border-[#f7dfe8] pb-3">
                         <h4 className="font-bold text-sm text-[#4a2b3d] flex items-center gap-2">
                           <Edit className="w-4 h-4 text-[#d94f86]" />
@@ -3605,99 +3655,399 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                     </div>
                   )}
 
-                  {/* Products Grid / Table */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {localProductsList.map((prod) => (
-                      <div
-                        key={prod.id}
-                        className="bg-white rounded-2xl p-4 border border-[#f7dfe8] shadow-2xs flex flex-col justify-between gap-3"
+                  {/* Real-time Search & Filter Toolbar */}
+                  <div className="bg-white p-4 rounded-2xl border border-[#f7dfe8] shadow-xs flex flex-col gap-3">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                      {/* Search Input Box */}
+                      <div className="relative flex-1">
+                        <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-[#8a6b7a]">
+                          <Search className="w-4 h-4 text-[#d94f86]" />
+                        </div>
+                        <input
+                          type="text"
+                          value={productSearchQuery}
+                          onChange={(e) => setProductSearchQuery(e.target.value)}
+                          placeholder="ابحث لحظياً عن أي منتج باسمه (Title) أو صنفه (Category)..."
+                          className="w-full pr-10 pl-9 py-2.5 bg-[#fff8f5] border border-[#f7dfe8] focus:border-[#d94f86] focus:bg-white rounded-xl text-xs sm:text-sm text-[#4a2b3d] placeholder:text-[#8a6b7a]/70 font-medium outline-none transition-all shadow-inner"
+                        />
+                        {productSearchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => setProductSearchQuery('')}
+                            className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8a6b7a] hover:text-[#d94f86] p-1 rounded-md transition-colors cursor-pointer"
+                            title="مسح البحث"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Filter by Category & View Toggle */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* Category Dropdown Filter */}
+                        <div className="flex items-center gap-1.5 bg-[#fff8f5] border border-[#f7dfe8] rounded-xl px-2.5 py-1.5">
+                          <Filter className="w-3.5 h-3.5 text-[#d94f86]" />
+                          <select
+                            value={productCategoryFilter}
+                            onChange={(e) => setProductCategoryFilter(e.target.value)}
+                            className="bg-transparent text-xs font-bold text-[#4a2b3d] outline-none cursor-pointer"
+                          >
+                            <option value="all">كل الأقسام ({localProductsList.length})</option>
+                            {localCategoriesList.map((cat) => {
+                              const catCount = localProductsList.filter(
+                                (p) => p.categoryId === cat.id || p.categorySlug === cat.slug || p.categoryName === cat.name
+                              ).length;
+                              return (
+                                <option key={cat.id} value={cat.id}>
+                                  {cat.name} ({catCount})
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+
+                        {/* View Switcher: Table vs Cards */}
+                        <div className="flex items-center bg-[#fdeaf1]/60 p-1 rounded-xl border border-[#f7dfe8]">
+                          <button
+                            type="button"
+                            onClick={() => setProductsViewMode('table')}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                              productsViewMode === 'table'
+                                ? 'bg-[#d94f86] text-white shadow-2xs'
+                                : 'text-[#8a6b7a] hover:text-[#4a2b3d]'
+                            }`}
+                            title="عرض الجدول المبوب"
+                          >
+                            <Table className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">جدول</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setProductsViewMode('grid')}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                              productsViewMode === 'grid'
+                                ? 'bg-[#d94f86] text-white shadow-2xs'
+                                : 'text-[#8a6b7a] hover:text-[#4a2b3d]'
+                            }`}
+                            title="عرض شبكة البطاقات"
+                          >
+                            <LayoutTemplate className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">بطاقات</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Stats & Quick Feedback */}
+                    <div className="flex items-center justify-between text-xs text-[#8a6b7a] pt-2 border-t border-[#f7dfe8]/60 flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center gap-1 font-bold text-[#4a2b3d]">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>نتائج التصفية اللحظية:</span>
+                          <span className="text-[#d94f86] font-black">{filteredProductsList.length}</span>
+                          <span>من أصل {localProductsList.length} منتج</span>
+                        </span>
+                        {(productSearchQuery || productCategoryFilter !== 'all') && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setProductSearchQuery('');
+                              setProductCategoryFilter('all');
+                            }}
+                            className="text-[11px] font-bold text-[#d94f86] hover:underline flex items-center gap-0.5 cursor-pointer mr-2"
+                          >
+                            <RefreshCw className="w-3 h-3" />
+                            <span>إعادة تعيين البحث</span>
+                          </button>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-[#8a6b7a]">
+                        تحديث فوري أثناء الكتابة بدون إعادة تحميل الصفحة
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Empty Search State */}
+                  {filteredProductsList.length === 0 && (
+                    <div className="bg-white rounded-2xl p-8 border border-[#f7dfe8] shadow-xs text-center flex flex-col items-center justify-center gap-3">
+                      <div className="w-14 h-14 rounded-2xl bg-[#fdeaf1] text-[#d94f86] flex items-center justify-center mb-1">
+                        <Search className="w-7 h-7" />
+                      </div>
+                      <h4 className="font-bold text-sm text-[#4a2b3d]">
+                        لم يتم العثور على أي منتج يطابق بحثك
+                      </h4>
+                      <p className="text-xs text-[#8a6b7a] max-w-md">
+                        {productSearchQuery ? (
+                          <>لا توجد نتائج مطابقة لعبارة البحث: <span className="font-bold text-[#d94f86]">"{productSearchQuery}"</span></>
+                        ) : (
+                          'لا توجد منتجات مسجلة في هذا القسم حالياً.'
+                        )}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProductSearchQuery('');
+                          setProductCategoryFilter('all');
+                        }}
+                        className="mt-2 px-4 py-2 bg-[#d94f86] hover:bg-[#c93d78] text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
                       >
-                        <div className="flex items-start gap-3">
-                          <img
-                            src={prod.images[0] || ''}
-                            alt={prod.title}
-                            className="w-16 h-16 rounded-xl object-cover bg-[#fff8f5] border border-[#f7dfe8] shrink-0"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <span className="text-[10px] text-[#d94f86] font-bold block">
-                              {prod.categoryName || 'عام'}
-                            </span>
-                            <h4 className="font-bold text-xs text-[#4a2b3d] line-clamp-2 leading-tight">
-                              {prod.title}
-                            </h4>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className="font-black text-[#d94f86] text-xs">
-                                {prod.price.toLocaleString()} {prod.currency || 'د.ج'}
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>مسح شريط البحث وإظهار كل المنتجات</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* PRODUCTS TABLE VIEW */}
+                  {filteredProductsList.length > 0 && productsViewMode === 'table' && (
+                    <div className="bg-white rounded-2xl border border-[#f7dfe8] shadow-xs overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-right border-collapse text-xs">
+                          <thead>
+                            <tr className="bg-[#fff8f5] border-b border-[#f7dfe8] text-[#4a2b3d] font-black">
+                              <th className="p-3 w-10 text-center text-[#8a6b7a]">#</th>
+                              <th className="p-3 w-16 text-center">الصورة</th>
+                              <th className="p-3 min-w-[200px]">اسم المنتج (Title)</th>
+                              <th className="p-3 min-w-[130px]">الصنف (Category)</th>
+                              <th className="p-3 min-w-[120px]">السعر (Price)</th>
+                              <th className="p-3 w-20 text-center">الحالة</th>
+                              <th className="p-3 min-w-[160px] text-center">الإجراءات</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#f7dfe8]/60">
+                            {filteredProductsList.map((prod, idx) => (
+                              <tr
+                                key={prod.id}
+                                className="hover:bg-[#fdeaf1]/25 transition-colors group"
+                              >
+                                <td className="p-3 text-center text-[#8a6b7a] font-bold text-[11px]">
+                                  {idx + 1}
+                                </td>
+                                <td className="p-3 text-center">
+                                  <img
+                                    src={
+                                      prod.images[0] ||
+                                      'https://raw.githubusercontent.com/dahmrisadik60-png/rozaketchendz/main/public/images/bissell-1.webp'
+                                    }
+                                    alt={prod.title}
+                                    className="w-12 h-12 rounded-xl object-cover bg-[#fff8f5] border border-[#f7dfe8] mx-auto shadow-2xs"
+                                    loading="lazy"
+                                    decoding="async"
+                                  />
+                                </td>
+                                <td className="p-3">
+                                  <div className="font-bold text-[#4a2b3d] line-clamp-2 leading-relaxed">
+                                    {prod.title}
+                                  </div>
+                                  {prod.brandName && (
+                                    <span className="text-[10px] text-[#8a6b7a] font-medium block mt-0.5">
+                                      العلامة: {prod.brandName}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="p-3">
+                                  <span className="inline-block px-2.5 py-1 rounded-lg text-[11px] font-bold bg-[#fdeaf1] text-[#d94f86] border border-[#f7dfe8]">
+                                    {prod.categoryName || 'عام'}
+                                  </span>
+                                </td>
+                                <td className="p-3">
+                                  <div className="font-black text-[#d94f86] text-xs sm:text-sm">
+                                    {prod.price.toLocaleString()} {prod.currency || 'د.ج'}
+                                  </div>
+                                  {prod.originalPrice && (
+                                    <div className="text-[10px] text-[#8a6b7a] line-through">
+                                      {prod.originalPrice.toLocaleString()} {prod.currency || 'د.ج'}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="p-3 text-center">
+                                  <span
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                      prod.isVisible !== false
+                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                        : 'bg-slate-100 text-slate-600 border border-slate-200'
+                                    }`}
+                                  >
+                                    <span
+                                      className={`w-1.5 h-1.5 rounded-full ${
+                                        prod.isVisible !== false ? 'bg-emerald-500' : 'bg-slate-400'
+                                      }`}
+                                    />
+                                    <span>{prod.isVisible !== false ? 'معروض' : 'مخفي'}</span>
+                                  </span>
+                                </td>
+                                <td className="p-3">
+                                  <div className="flex items-center justify-center gap-2">
+                                    {/* Edit Button */}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingProduct(prod);
+                                        setIsCreatingProduct(false);
+                                        setTimeout(() => {
+                                          productEditorSectionRef.current?.scrollIntoView({
+                                            behavior: 'smooth',
+                                            block: 'start'
+                                          });
+                                        }, 50);
+                                      }}
+                                      className="px-3 py-1.5 bg-[#fdeaf1] hover:bg-[#d94f86] text-[#d94f86] hover:text-white rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs border border-[#f7dfe8]"
+                                      title="تعديل تفاصيل وسعر وصور هذا المنتج"
+                                    >
+                                      <Edit className="w-3.5 h-3.5" />
+                                      <span>تعديل</span>
+                                    </button>
+
+                                    {/* Delete Button */}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setConfirmDialog({
+                                          isOpen: true,
+                                          title: 'حذف المنتج نهائياً',
+                                          message: `هل تريد حذف هذا المنتج (${prod.title}) نهائياً من المتجر وقاعدة البيانات؟`,
+                                          confirmText: 'نعم احذف',
+                                          onConfirm: async () => {
+                                            const nextList = localProductsList.filter((p) => p.id !== prod.id);
+                                            setLocalProductsList(nextList);
+                                            saveStoredCatalogProducts(nextList);
+                                            if (onProductsUpdated) {
+                                              onProductsUpdated(nextList);
+                                            }
+                                            showNotice('تم حذف المنتج بنجاح.');
+
+                                            try {
+                                              await deleteCatalogProduct(prod.id);
+                                            } catch (err: unknown) {
+                                              console.warn('Firestore delete product error:', err);
+                                            }
+                                          }
+                                        });
+                                      }}
+                                      className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white rounded-xl text-xs font-black flex items-center gap-1 transition-all cursor-pointer border border-rose-200"
+                                      title="حذف هذا المنتج نهائياً"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                      <span className="hidden sm:inline">حذف</span>
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* PRODUCTS GRID VIEW */}
+                  {filteredProductsList.length > 0 && productsViewMode === 'grid' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {filteredProductsList.map((prod) => (
+                        <div
+                          key={prod.id}
+                          className="bg-white rounded-2xl p-4 border border-[#f7dfe8] shadow-2xs flex flex-col justify-between gap-3 hover:border-[#d94f86]/50 transition-colors"
+                        >
+                          <div className="flex items-start gap-3">
+                            <img
+                              src={
+                                prod.images[0] ||
+                                'https://raw.githubusercontent.com/dahmrisadik60-png/rozaketchendz/main/public/images/bissell-1.webp'
+                              }
+                              alt={prod.title}
+                              className="w-16 h-16 rounded-xl object-cover bg-[#fff8f5] border border-[#f7dfe8] shrink-0"
+                              loading="lazy"
+                              decoding="async"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <span className="text-[10px] text-[#d94f86] font-bold block">
+                                {prod.categoryName || 'عام'}
                               </span>
-                              {prod.originalPrice && (
-                                <span className="text-[10px] text-[#8a6b7a] line-through">
-                                  {prod.originalPrice.toLocaleString()}
+                              <h4 className="font-bold text-xs text-[#4a2b3d] line-clamp-2 leading-tight">
+                                {prod.title}
+                              </h4>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="font-black text-[#d94f86] text-xs">
+                                  {prod.price.toLocaleString()} {prod.currency || 'د.ج'}
                                 </span>
-                              )}
+                                {prod.originalPrice && (
+                                  <span className="text-[10px] text-[#8a6b7a] line-through">
+                                    {prod.originalPrice.toLocaleString()}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-2 border-t border-[#f7dfe8] text-xs">
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`w-2 h-2 rounded-full ${
+                                  prod.isVisible !== false ? 'bg-emerald-500' : 'bg-[#edd6e0]'
+                                }`}
+                              />
+                              <span className="text-[11px] text-[#8a6b7a]">
+                                {prod.isVisible !== false ? 'معروض' : 'مخفي'}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              {/* Edit Button */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingProduct(prod);
+                                  setIsCreatingProduct(false);
+                                  setTimeout(() => {
+                                    productEditorSectionRef.current?.scrollIntoView({
+                                      behavior: 'smooth',
+                                      block: 'start'
+                                    });
+                                  }, 50);
+                                }}
+                                className="px-3 py-1.5 bg-[#fdeaf1] hover:bg-[#d94f86] text-[#d94f86] hover:text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs border border-[#f7dfe8]"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                                <span>تعديل</span>
+                              </button>
+
+                              {/* Delete Button */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setConfirmDialog({
+                                    isOpen: true,
+                                    title: 'حذف المنتج نهائياً',
+                                    message: `هل تريد حذف هذا المنتج (${prod.title}) نهائياً من المتجر وقاعدة البيانات؟`,
+                                    confirmText: 'نعم احذف',
+                                    onConfirm: async () => {
+                                      const nextList = localProductsList.filter((p) => p.id !== prod.id);
+                                      setLocalProductsList(nextList);
+                                      saveStoredCatalogProducts(nextList);
+                                      if (onProductsUpdated) {
+                                        onProductsUpdated(nextList);
+                                      }
+                                      showNotice('تم حذف المنتج بنجاح.');
+
+                                      try {
+                                        await deleteCatalogProduct(prod.id);
+                                      } catch (err: unknown) {
+                                        console.warn('Firestore delete product error:', err);
+                                      }
+                                    }
+                                  });
+                                }}
+                                className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer border border-rose-200"
+                                title="حذف المنتج"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline">حذف</span>
+                              </button>
                             </div>
                           </div>
                         </div>
-
-                        <div className="flex items-center justify-between pt-2 border-t border-[#f7dfe8] text-xs">
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              className={`w-2 h-2 rounded-full ${
-                                prod.isVisible !== false ? 'bg-emerald-500' : 'bg-[#edd6e0]'
-                              }`}
-                            />
-                            <span className="text-[11px] text-[#8a6b7a]">
-                              {prod.isVisible !== false ? 'معروض' : 'مخفي'}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingProduct(prod);
-                                setIsCreatingProduct(false);
-                              }}
-                              className="px-2.5 py-1 bg-[#fdeaf1] hover:bg-[#f7dfe8] text-[#4a2b3d] rounded-lg text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
-                            >
-                              <Edit className="w-3 h-3" />
-                              <span>تعديل</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setConfirmDialog({
-                                  isOpen: true,
-                                  title: 'حذف المنتج نهائياً',
-                                  message: `هل تريد حذف هذا المنتج (${prod.title}) نهائياً من المتجر وقاعدة البيانات؟`,
-                                  confirmText: 'نعم احذف',
-                                  onConfirm: async () => {
-                                    const nextList = localProductsList.filter((p) => p.id !== prod.id);
-                                    setLocalProductsList(nextList);
-                                    saveStoredCatalogProducts(nextList);
-                                    if (onProductsUpdated) {
-                                      onProductsUpdated(nextList);
-                                    }
-                                    showNotice('تم حذف المنتج بنجاح.');
-
-                                    try {
-                                      await deleteCatalogProduct(prod.id);
-                                    } catch (err: unknown) {
-                                      console.warn('Firestore delete product error:', err);
-                                    }
-                                  }
-                                });
-                              }}
-                              className="p-1.5 bg-[#fdeaf1] hover:bg-[#f7dfe8] text-[#c93d78] rounded-lg text-xs transition-colors cursor-pointer border border-[#f7dfe8]"
-                              title="حذف"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
