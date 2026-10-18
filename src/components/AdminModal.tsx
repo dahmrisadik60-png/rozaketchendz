@@ -452,6 +452,104 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     }
   };
 
+  // Submit / Import Handler for Extracted and Cleaned Products
+  const handleImportExtractedProducts = async (customItemsToImport?: Array<{
+    title: string;
+    currentPrice?: string;
+    price?: string;
+    oldPrice?: string;
+    image?: string;
+    url?: string;
+    category?: string;
+  }>) => {
+    try {
+      setIsImportingExtracted(true);
+
+      const rawItems = (customItemsToImport && customItemsToImport.length > 0)
+        ? customItemsToImport
+        : (cleanedCustomProducts && cleanedCustomProducts.length > 0)
+          ? cleanedCustomProducts
+          : FASSIL_RAW_PRODUCTS;
+
+      if (!rawItems || rawItems.length === 0) {
+        showNotice('⚠️ لا توجد منتجات منظفة لإضافتها. يرجى تنظيف ملف CSV أولاً!');
+        setIsImportingExtracted(false);
+        return;
+      }
+
+      showNotice(`⏳ جاري معالجة وتصنيف ${rawItems.length} منتجاً ونشرها في المتجر...`);
+
+      const existingTitles = new Set(localProductsList.map((p) => (p.title || '').trim().toLowerCase()));
+      const existingIds = new Set(localProductsList.map((p) => p.id));
+      const newlyTransformedProducts: BeautyProduct[] = [];
+      const payloadForServer: any[] = [];
+
+      rawItems.forEach((raw, idx) => {
+        const title = (raw.title || '').trim();
+        if (!title) return;
+        const key = title.toLowerCase();
+
+        // Transform to active, categorized BeautyProduct
+        const productObj = transformToActiveProduct(raw, idx);
+
+        // Ensure status is published & active
+        productObj.isVisible = true;
+        productObj.inStock = true;
+
+        if (!existingTitles.has(key)) {
+          existingTitles.add(key);
+          if (existingIds.has(productObj.id)) {
+            productObj.id = `${productObj.id}-${Date.now()}-${idx}`;
+          }
+          existingIds.add(productObj.id);
+          newlyTransformedProducts.push(productObj);
+        }
+
+        payloadForServer.push({
+          title: productObj.title,
+          price: `${productObj.price.toLocaleString()} د.ج`,
+          currentPrice: `${productObj.price.toLocaleString()} د.ج`,
+          oldPrice: productObj.originalPrice ? `${productObj.originalPrice.toLocaleString()} د.ج` : '',
+          url: (raw as any).url || `https://fassil.shop/product/${productObj.id}/`,
+          image: productObj.images[0] || '',
+          category: productObj.categoryName || 'عام'
+        });
+      });
+
+      const countToAdd = newlyTransformedProducts.length;
+
+      // 1. Sync to backend API (updates fassilProducts.json & cleaned_fassil.csv)
+      try {
+        await fetch('/api/import-products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ products: payloadForServer })
+        });
+      } catch (serverErr) {
+        console.warn('Backend sync warning (non-fatal):', serverErr);
+      }
+
+      // 2. Update local store state & localStorage immediately
+      const merged = [...localProductsList, ...newlyTransformedProducts];
+      setLocalProductsList(merged);
+      saveStoredCatalogProducts(merged);
+      onProductsUpdated?.(merged);
+
+      // 3. Save to Firebase Firestore in background
+      for (const prod of newlyTransformedProducts) {
+        saveCatalogProduct(prod).catch(() => {});
+      }
+
+      const displayCount = countToAdd > 0 ? countToAdd : rawItems.length;
+      showNotice(`🎉 تمت إضافة ${displayCount} منتجاً إلى متجرك بنجاح وتعيينها كـ "منشورة / نشطة" وتوزيعها على الأقسام المناسبة!`);
+    } catch (err: any) {
+      console.error('Error importing extracted products:', err);
+      showNotice('حدث خطأ أثناء إضافة المنتجات إلى المتجر.');
+    } finally {
+      setIsImportingExtracted(false);
+    }
+  };
+
   const handleCatalogFileUpload = async (files: FileList | File[] | null) => {
     if (!files || files.length === 0 || !editingProduct) return;
 
@@ -1957,6 +2055,17 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                     <div className="flex items-center gap-2 flex-wrap">
                       <button
                         type="button"
+                        onClick={() => handleImportExtractedProducts(FASSIL_RAW_PRODUCTS)}
+                        disabled={isImportingExtracted}
+                        className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95 disabled:opacity-50"
+                        title="إضافة وتمرير كافة المنتجات المستخرجة والمنظفة تلقائياً إلى المتجر مع الأقسام وحالة نشطة"
+                      >
+                        <PackagePlus className="w-4 h-4" />
+                        <span>إضافة المنتجات المستخرجة إلى المتجر ({FASSIL_RAW_PRODUCTS.length})</span>
+                      </button>
+
+                      <button
+                        type="button"
                         onClick={() => setShowCsvCleanerModal(true)}
                         className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
                         title="معالجة وتنظيف ملفات CSV وإزالة التكرار وتصدير الـ 4 أعمدة"
@@ -2096,6 +2205,17 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                             <div className="flex items-center gap-2 flex-wrap">
                               <button
                                 type="button"
+                                onClick={() => handleImportExtractedProducts(FASSIL_RAW_PRODUCTS)}
+                                disabled={isImportingExtracted}
+                                className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-black flex items-center gap-1.5 shadow-md hover:shadow-lg transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                                title="إضافة وتمرير كافة المنتجات المنظفة إلى المتجر مع تصنيف الأقسام وتعيينها كـ منشورة / Active"
+                              >
+                                <PackagePlus className="w-3.5 h-3.5" />
+                                <span>إضافة المنتجات المستخرجة إلى المتجر ({FASSIL_RAW_PRODUCTS.length} منتج)</span>
+                              </button>
+
+                              <button
+                                type="button"
                                 onClick={() => {
                                   const productsToExport = CSV_IMPORTED_PRODUCTS.map((p) => ({
                                     title: p.title,
@@ -2227,6 +2347,29 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                               </tbody>
                             </table>
                           </div>
+
+                          {/* Action Bar Under Tab 1 Table */}
+                          <div className="flex items-center justify-between gap-3 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 p-3 rounded-xl border border-emerald-200 shadow-2xs flex-wrap">
+                            <div className="flex items-center gap-2">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <span className="text-xs font-bold text-emerald-900">
+                                يمكنك إضافة كافة المنتجات المنظفة المستخرجة ({FASSIL_RAW_PRODUCTS.length} منتج) بضغطة زر إلى متجرك مباشرة.
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleImportExtractedProducts(FASSIL_RAW_PRODUCTS)}
+                              disabled={isImportingExtracted}
+                              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-black flex items-center gap-2 rounded-xl shadow-md hover:shadow-lg transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                            >
+                              <PackagePlus className="w-4 h-4" />
+                              <span>
+                                {isImportingExtracted
+                                  ? 'جاري الإضافة...'
+                                  : `إضافة المنتجات المستخرجة إلى المتجر (${FASSIL_RAW_PRODUCTS.length} منتج)`}
+                              </span>
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         /* Cleaner Tab for New Scraped CSV Files */
@@ -2316,18 +2459,35 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                                 </div>
                               </div>
 
-                              <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center justify-between gap-2 flex-wrap">
                                 <span className="font-bold text-xs text-[#4a2b3d]">
                                   معاينة البيانات المنظفة ({cleanedCustomProducts.length} منتج فريد):
                                 </span>
-                                <button
-                                  type="button"
-                                  onClick={() => downloadCleanCsvFile(cleanedCustomProducts, 'custom_cleaned_products.csv')}
-                                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
-                                >
-                                  <Download className="w-3.5 h-3.5" />
-                                  <span>تصدير CSV نظيف بترميز UTF-8</span>
-                                </button>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleImportExtractedProducts(cleanedCustomProducts)}
+                                    disabled={isImportingExtracted}
+                                    className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-black flex items-center gap-2 cursor-pointer shadow-md hover:shadow-lg transition-all active:scale-95 disabled:opacity-50"
+                                    title="إضافة وتمرير كافة المنتجات المستخرجة والمنظفة إلى المتجر مباشرة مع الأقسام التلقائية"
+                                  >
+                                    <PackagePlus className="w-4 h-4" />
+                                    <span>
+                                      {isImportingExtracted
+                                        ? 'جاري إضافة المنتجات...'
+                                        : `إضافة المنتجات المستخرجة إلى المتجر (${cleanedCustomProducts.length} منتج)`}
+                                    </span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => downloadCleanCsvFile(cleanedCustomProducts, 'custom_cleaned_products.csv')}
+                                    className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
+                                  >
+                                    <Download className="w-3.5 h-3.5" />
+                                    <span>تصدير CSV نظيف بترميز UTF-8</span>
+                                  </button>
+                                </div>
                               </div>
 
                               <div className="max-h-60 overflow-y-auto rounded-xl border border-slate-200">
@@ -2359,6 +2519,37 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                                     ))}
                                   </tbody>
                                 </table>
+                              </div>
+
+                              {/* Interactive Action Bar Under Preview Table */}
+                              <div className="flex items-center justify-between gap-3 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 p-3.5 rounded-xl border border-emerald-200 shadow-xs flex-wrap">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                                    <CheckCircle2 className="w-4 h-4" />
+                                  </div>
+                                  <div>
+                                    <span className="text-xs font-black text-emerald-900 block">
+                                      جاهز للنشر الفوري: {cleanedCustomProducts.length} منتج فريد تم تصنيفه تلقائياً
+                                    </span>
+                                    <span className="text-[11px] text-emerald-700">
+                                      سيتم حفظ وتمرير المنتجات لقاعدة بيانات الموقع وتعيين حالتها كـ "منشورة / Active"
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleImportExtractedProducts(cleanedCustomProducts)}
+                                  disabled={isImportingExtracted}
+                                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-black flex items-center gap-2 cursor-pointer shadow-md hover:shadow-lg transition-all active:scale-95 shrink-0 disabled:opacity-50"
+                                >
+                                  <PackagePlus className="w-4 h-4" />
+                                  <span>
+                                    {isImportingExtracted
+                                      ? 'جاري الإضافة...'
+                                      : `إضافة ${cleanedCustomProducts.length} منتج إلى المتجر الآن`}
+                                  </span>
+                                </button>
                               </div>
                             </div>
                           )}
