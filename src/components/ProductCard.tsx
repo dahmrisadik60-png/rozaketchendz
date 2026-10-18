@@ -10,7 +10,7 @@ interface ProductCardProps {
   compact?: boolean;
 }
 
-export const ProductCard: React.FC<ProductCardProps> = ({ 
+export const ProductCard: React.FC<ProductCardProps> = React.memo(({ 
   product, 
   onDirectOrder,
   compact = false 
@@ -83,6 +83,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           alt={product.title}
           className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
           loading="lazy"
+          decoding="async"
         />
         {!product.inStock && (
           <div className="absolute inset-0 bg-[#4a2b3d]/70 backdrop-blur-xs flex items-center justify-center text-white font-bold text-xs">
@@ -165,4 +166,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       </div>
     </div>
   );
-};
+});
+
+ProductCard.displayName = 'ProductCard';

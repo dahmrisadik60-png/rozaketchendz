@@ -470,6 +470,8 @@ export const CheckoutPage: React.FC = () => {
                   src={product.images[0] || ''}
                   alt={product.title}
                   className="w-14 h-14 rounded-xl object-cover bg-[#fff8f5] shrink-0 border border-[#f7dfe8]"
+                  loading="lazy"
+                  decoding="async"
                 />
                 <div className="flex-1 min-w-0">
                   <h4 className="font-bold text-xs text-[#4a2b3d] truncate">

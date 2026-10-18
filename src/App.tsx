@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { 
   BeautyProduct, 
@@ -31,17 +31,19 @@ import {
 } from './services/firebase';
 import { CartProvider } from './context/CartProvider';
 import { Header } from './components/Header';
-import { CartDrawer } from './components/CartDrawer';
-import { OrderModal } from './components/OrderModal';
-import { SuccessModal } from './components/SuccessModal';
-import { AdminModal } from './components/AdminModal';
 import { Footer } from './components/Footer';
 
-// Pages
+// Core Home Page remains eagerly loaded for instant initial render
 import { HomePage } from './pages/HomePage';
-import { ProductPage } from './pages/ProductPage';
-import { CategoryPage } from './pages/CategoryPage';
-import { CheckoutPage } from './pages/CheckoutPage';
+
+// Lazy-loaded secondary pages and modals for optimal initial bundle size and speed
+const ProductPage = lazy(() => import('./pages/ProductPage').then(m => ({ default: m.ProductPage })));
+const CategoryPage = lazy(() => import('./pages/CategoryPage').then(m => ({ default: m.CategoryPage })));
+const CheckoutPage = lazy(() => import('./pages/CheckoutPage').then(m => ({ default: m.CheckoutPage })));
+const CartDrawer = lazy(() => import('./components/CartDrawer').then(m => ({ default: m.CartDrawer })));
+const OrderModal = lazy(() => import('./components/OrderModal').then(m => ({ default: m.OrderModal })));
+const SuccessModal = lazy(() => import('./components/SuccessModal').then(m => ({ default: m.SuccessModal })));
+const AdminModal = lazy(() => import('./components/AdminModal').then(m => ({ default: m.AdminModal })));
 
 import { DEFAULT_CATEGORIES, DEFAULT_BANNER } from './data/categories';
 import { ROZA_BEAUTY_PRODUCT } from './data/products';
@@ -155,44 +157,46 @@ export default function App() {
     };
   }, []);
 
-  const handleOpenDirectOrder = (targetProduct: BeautyProduct) => {
+  const handleOpenDirectOrder = useCallback((targetProduct: BeautyProduct) => {
     setModalProduct(targetProduct);
     setIsOrderModalOpen(true);
-  };
+  }, []);
 
-  const handleOrderSubmitted = (newOrder: Order) => {
+  const handleOrderSubmitted = useCallback((newOrder: Order) => {
     setOrders((prev) => [newOrder, ...prev]);
     setCompletedOrder(newOrder);
-  };
+  }, []);
 
-  const handleProductUpdated = (updated: BeautyProduct) => {
+  const handleProductUpdated = useCallback((updated: BeautyProduct) => {
     setProduct(updated);
     saveStoredProduct(updated);
-  };
+  }, []);
 
-  const handleReviewsUpdated = (updated: CustomerReview[]) => {
+  const handleReviewsUpdated = useCallback((updated: CustomerReview[]) => {
     setReviews(updated);
     saveStoredReviews(updated);
-  };
+  }, []);
 
-  const handleAddReview = (newReview: CustomerReview) => {
-    const updated = [newReview, ...reviews];
-    setReviews(updated);
-    saveStoredReviews(updated);
-    saveReviewsToFirestore(updated).catch((err) => {
-      console.warn('Reviews cloud sync notice:', err);
+  const handleAddReview = useCallback((newReview: CustomerReview) => {
+    setReviews((prev) => {
+      const updated = [newReview, ...prev];
+      saveStoredReviews(updated);
+      saveReviewsToFirestore(updated).catch((err) => {
+        console.warn('Reviews cloud sync notice:', err);
+      });
+      return updated;
     });
-  };
+  }, []);
 
-  const handleCatalogUpdated = (updated: BeautyProduct[]) => {
+  const handleCatalogUpdated = useCallback((updated: BeautyProduct[]) => {
     setProductsList(updated);
     saveStoredCatalogProducts(updated);
-  };
+  }, []);
 
-  const handleCategoriesUpdated = (updated: ProductCategory[]) => {
+  const handleCategoriesUpdated = useCallback((updated: ProductCategory[]) => {
     setCategories(updated);
     saveStoredCategories(updated);
-  };
+  }, []);
 
   const activeProduct = product || ROZA_BEAUTY_PRODUCT;
   // The categorized fassil.shop catalog (src/data/fassilProducts.json) ships with the site:
@@ -220,107 +224,125 @@ export default function App() {
           />
 
           {/* Slideout Cart Drawer */}
-          <CartDrawer />
+          <Suspense fallback={null}>
+            <CartDrawer />
+          </Suspense>
 
           {/* Main App Container */}
           <main className="flex-1 max-w-6xl mx-auto w-full px-3.5 sm:px-6 py-4 sm:py-6">
-            <Routes>
-              {/* Home Page: Hero Banner, 4 Perks, Categories & Products Grid */}
-              <Route
-                path="/"
-                element={
-                  <HomePage
-                    products={currentCatalog}
-                    categories={currentCategories}
-                    banner={banner}
-                    onDirectOrder={handleOpenDirectOrder}
-                  />
-                }
-              />
+            <Suspense fallback={
+              <div className="min-h-[50vh] flex flex-col items-center justify-center p-8">
+                <div className="w-10 h-10 border-3 border-[#f7dfe8] border-t-[#d94f86] rounded-full animate-spin" />
+              </div>
+            }>
+              <Routes>
+                {/* Home Page: Hero Banner, 4 Perks, Categories & Products Grid */}
+                <Route
+                  path="/"
+                  element={
+                    <HomePage
+                      products={currentCatalog}
+                      categories={currentCategories}
+                      banner={banner}
+                      onDirectOrder={handleOpenDirectOrder}
+                    />
+                  }
+                />
 
-              {/* Dynamic Product Page: Exact design of original landing page, dynamic for any id */}
-              <Route
-                path="/product/:id"
-                element={
-                  <ProductPage
-                    products={currentCatalog}
-                    reviews={reviews}
-                    onOpenOrderModal={handleOpenDirectOrder}
-                    onAddReview={handleAddReview}
-                  />
-                }
-              />
+                {/* Dynamic Product Page: Exact design of original landing page, dynamic for any id */}
+                <Route
+                  path="/product/:id"
+                  element={
+                    <ProductPage
+                      products={currentCatalog}
+                      reviews={reviews}
+                      onOpenOrderModal={handleOpenDirectOrder}
+                      onAddReview={handleAddReview}
+                    />
+                  }
+                />
 
-              {/* Category Page with sorting & price filter */}
-              <Route
-                path="/category/:slug"
-                element={
-                  <CategoryPage
-                    products={currentCatalog}
-                    categories={currentCategories}
-                    onDirectOrder={handleOpenDirectOrder}
-                  />
-                }
-              />
+                {/* Category Page with sorting & price filter */}
+                <Route
+                  path="/category/:slug"
+                  element={
+                    <CategoryPage
+                      products={currentCatalog}
+                      categories={currentCategories}
+                      onDirectOrder={handleOpenDirectOrder}
+                    />
+                  }
+                />
 
-              {/* Checkout Page: 69 wilayas, order notes, WhatsApp thank-you confirmation */}
-              <Route path="/checkout" element={<CheckoutPage />} />
+                {/* Checkout Page: 69 wilayas, order notes, WhatsApp thank-you confirmation */}
+                <Route path="/checkout" element={<CheckoutPage />} />
 
-              {/* Admin Direct Route: opens AdminModal directly on /admin */}
-              <Route
-                path="/admin"
-                element={
-                  <HomePage
-                    products={currentCatalog}
-                    categories={currentCategories}
-                    banner={banner}
-                    onDirectOrder={handleOpenDirectOrder}
-                  />
-                }
-              />
+                {/* Admin Direct Route: opens AdminModal directly on /admin */}
+                <Route
+                  path="/admin"
+                  element={
+                    <HomePage
+                      products={currentCatalog}
+                      categories={currentCategories}
+                      banner={banner}
+                      onDirectOrder={handleOpenDirectOrder}
+                    />
+                  }
+                />
 
-              {/* Catch-all redirect to Home */}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+                {/* Catch-all redirect to Home */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Suspense>
           </main>
 
           {/* Direct Buy Popup Modal ("أطلب الآن" maintains exact original behavior) */}
           {modalProduct && (
-            <OrderModal
-              isOpen={isOrderModalOpen}
-              onClose={() => setIsOrderModalOpen(false)}
-              product={modalProduct}
-              onSubmitOrder={handleOrderSubmitted}
-            />
+            <Suspense fallback={null}>
+              <OrderModal
+                isOpen={isOrderModalOpen}
+                onClose={() => setIsOrderModalOpen(false)}
+                product={modalProduct}
+                onSubmitOrder={handleOrderSubmitted}
+              />
+            </Suspense>
           )}
 
           {/* Success Confirmation Modal */}
-          <SuccessModal
-            order={completedOrder}
-            onClose={() => setCompletedOrder(null)}
-          />
+          {completedOrder && (
+            <Suspense fallback={null}>
+              <SuccessModal
+                order={completedOrder}
+                onClose={() => setCompletedOrder(null)}
+              />
+            </Suspense>
+          )}
 
           {/* Admin Dashboard (PIN 2009 + Google Auth dahmrisadik60@gmail.com) */}
-          <AdminModal
-            isOpen={isAdminOpen}
-            onClose={() => {
-              setIsAdminOpen(false);
-              if (window.location.pathname === '/admin' || window.location.hash === '#admin') {
-                window.history.replaceState(null, '', '/');
-              }
-            }}
-            product={activeProduct}
-            onProductUpdated={handleProductUpdated}
-            orders={orders}
-            onOrdersUpdated={(updated) => setOrders(updated)}
-            reviews={reviews}
-            onReviewsUpdated={handleReviewsUpdated}
-            products={currentCatalog}
-            onProductsUpdated={handleCatalogUpdated}
-            categories={currentCategories}
-            onCategoriesUpdated={handleCategoriesUpdated}
-            banner={banner}
-          />
+          {isAdminOpen && (
+            <Suspense fallback={null}>
+              <AdminModal
+                isOpen={isAdminOpen}
+                onClose={() => {
+                  setIsAdminOpen(false);
+                  if (window.location.pathname === '/admin' || window.location.hash === '#admin') {
+                    window.history.replaceState(null, '', '/');
+                  }
+                }}
+                product={activeProduct}
+                onProductUpdated={handleProductUpdated}
+                orders={orders}
+                onOrdersUpdated={(updated) => setOrders(updated)}
+                reviews={reviews}
+                onReviewsUpdated={handleReviewsUpdated}
+                products={currentCatalog}
+                onProductsUpdated={handleCatalogUpdated}
+                categories={currentCategories}
+                onCategoriesUpdated={handleCategoriesUpdated}
+                banner={banner}
+              />
+            </Suspense>
+          )}
 
           {/* Official Footer with 0777413872 contact & 69 wilayas */}
           <Footer 

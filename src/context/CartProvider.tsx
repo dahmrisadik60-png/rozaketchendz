@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { CartItem, BeautyProduct } from '../types';
 import { CartContext } from './CartContext';
 import { TrackingService } from '../services/tracking';
@@ -43,7 +43,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [favorites]);
 
-  const addToCart = (product: BeautyProduct, quantity = 1) => {
+  const addToCart = useCallback((product: BeautyProduct, quantity = 1) => {
     setCart((prev) => {
       const existingIndex = prev.findIndex((item) => item.product.id === product.id);
       if (existingIndex > -1) {
@@ -67,15 +67,15 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     setIsCartDrawerOpen(true);
-  };
+  }, []);
 
-  const removeFromCart = (productId: string) => {
+  const removeFromCart = useCallback((productId: string) => {
     setCart((prev) => prev.filter((item) => item.product.id !== productId));
-  };
+  }, []);
 
-  const updateQuantity = (productId: string, quantity: number) => {
+  const updateQuantity = useCallback((productId: string, quantity: number) => {
     if (quantity <= 0) {
-      removeFromCart(productId);
+      setCart((prev) => prev.filter((item) => item.product.id !== productId));
       return;
     }
     setCart((prev) =>
@@ -83,42 +83,54 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         item.product.id === productId ? { ...item, quantity } : item
       )
     );
-  };
+  }, []);
 
-  const clearCart = () => {
+  const clearCart = useCallback(() => {
     setCart([]);
-  };
+  }, []);
 
-  const toggleFavorite = (productId: string) => {
+  const toggleFavorite = useCallback((productId: string) => {
     setFavorites((prev) =>
       prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId]
     );
-  };
+  }, []);
 
-  const isFavorite = (productId: string) => {
+  const isFavorite = useCallback((productId: string) => {
     return favorites.includes(productId);
-  };
+  }, [favorites]);
 
-  const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const subtotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+  const totalItems = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
+  const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0), [cart]);
+
+  const contextValue = useMemo(() => ({
+    cart,
+    addToCart,
+    removeFromCart,
+    updateQuantity,
+    clearCart,
+    totalItems,
+    subtotal,
+    isCartDrawerOpen,
+    setIsCartDrawerOpen,
+    favorites,
+    toggleFavorite,
+    isFavorite
+  }), [
+    cart,
+    addToCart,
+    removeFromCart,
+    updateQuantity,
+    clearCart,
+    totalItems,
+    subtotal,
+    isCartDrawerOpen,
+    favorites,
+    toggleFavorite,
+    isFavorite
+  ]);
 
   return (
-    <CartContext.Provider
-      value={{
-        cart,
-        addToCart,
-        removeFromCart,
-        updateQuantity,
-        clearCart,
-        totalItems,
-        subtotal,
-        isCartDrawerOpen,
-        setIsCartDrawerOpen,
-        favorites,
-        toggleFavorite,
-        isFavorite
-      }}
-    >
+    <CartContext.Provider value={contextValue}>
       {children}
     </CartContext.Provider>
   );

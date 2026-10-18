@@ -72,6 +72,8 @@ export const CartDrawer: React.FC = () => {
                   src={product.images[0] || ''}
                   alt={product.title}
                   className="w-18 h-18 rounded-xl object-cover bg-[#fff8f5] border border-[#f7dfe8] shrink-0"
+                  loading="lazy"
+                  decoding="async"
                 />
 
                 {/* Details */}

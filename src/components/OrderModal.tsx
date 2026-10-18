@@ -179,6 +179,8 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                 src={product.images[0]} 
                 alt={product.title} 
                 className="w-12 h-12 rounded-xl object-cover border border-[#f7dfe8]" 
+                loading="lazy"
+                decoding="async"
               />
               <div>
                 <div className="text-xs font-bold text-[#4a2b3d] line-clamp-1">{product.title}</div>

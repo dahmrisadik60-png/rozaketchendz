@@ -189,6 +189,7 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
               referrerPolicy="no-referrer"
               className="w-full h-full object-contain"
               loading="lazy"
+              decoding="async"
             />
           </button>
         ))}

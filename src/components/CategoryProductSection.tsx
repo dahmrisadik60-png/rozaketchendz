@@ -10,7 +10,7 @@ interface CategoryProductSectionProps {
   onDirectOrder: (product: BeautyProduct) => void;
 }
 
-export const CategoryProductSection: React.FC<CategoryProductSectionProps> = ({
+export const CategoryProductSection: React.FC<CategoryProductSectionProps> = React.memo(({
   category,
   products,
   onDirectOrder
@@ -146,4 +146,6 @@ export const CategoryProductSection: React.FC<CategoryProductSectionProps> = ({
       </div>
     </section>
   );
-};
+});
+
+CategoryProductSection.displayName = 'CategoryProductSection';
