@@ -9,6 +9,8 @@ import { ProductCard } from '../components/ProductCard';
 import { TrackingService } from '../services/tracking';
 import { useCart } from '../context/CartContext';
 import { Sparkles } from 'lucide-react';
+import { ProductSeo } from '../components/ProductSeo';
+import fassilAlbumProducts from '../data/fassil_products_album.json';
 
 interface ProductPageProps {
   products: BeautyProduct[];
@@ -26,9 +28,43 @@ export const ProductPage: React.FC<ProductPageProps> = ({
   const { id } = useParams<{ id: string }>();
   const { addToCart } = useCart();
 
-  // Find target product by id
+  // Find target product by id and enrich with full images array from fassil_products_album.json
   const product = useMemo(() => {
-    return products.find((p) => p.id === id) || products[0];
+    const rawProd = products.find((p) => p.id === id) || products[0];
+    if (!rawProd) return null;
+
+    // Look for matching product in album JSON by title or URL or id
+    const cleanTitle = (rawProd.title || '').trim().toLowerCase();
+    const albumMatch = (fassilAlbumProducts as Array<{
+      title?: string;
+      url?: string;
+      images?: string[];
+      image?: string;
+    }>).find((item) => {
+      const itemTitle = (item.title || '').trim().toLowerCase();
+      if (!itemTitle) return false;
+      return (
+        itemTitle === cleanTitle ||
+        cleanTitle.includes(itemTitle) ||
+        itemTitle.includes(cleanTitle) ||
+        (rawProd.id && item.url && item.url.includes(rawProd.id))
+      );
+    });
+
+    const albumImages = albumMatch?.images && Array.isArray(albumMatch.images) && albumMatch.images.length > 0
+      ? albumMatch.images
+      : (albumMatch?.image ? [albumMatch.image] : []);
+
+    const combinedImages = Array.from(new Set([
+      ...(albumImages.length > 0 ? albumImages : []),
+      ...(rawProd.images && Array.isArray(rawProd.images) ? rawProd.images : []),
+      ...(rawProd.image ? [rawProd.image] : [])
+    ])).filter(Boolean);
+
+    return {
+      ...rawProd,
+      images: combinedImages.length > 0 ? combinedImages : (rawProd.images || [])
+    };
   }, [products, id]);
 
   // Similar products in same category (excluding current)
@@ -64,6 +100,9 @@ export const ProductPage: React.FC<ProductPageProps> = ({
 
   return (
     <div className="flex flex-col gap-10 pb-16">
+      {/* Dynamic SEO Meta Tags & Schema.org JSON-LD Structured Data */}
+      <ProductSeo product={product} />
+
       {/* Breadcrumb Navigation */}
       <nav className="flex items-center gap-2 text-xs text-[#8a6b7a]">
         <Link to="/" className="hover:text-[#d94f86] transition-colors">

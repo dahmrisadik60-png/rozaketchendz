@@ -2292,6 +2292,16 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                                 <span>تحميل كتالوج fassil.shop المنظف (55 منتج)</span>
                               </a>
 
+                              <a
+                                href="/fassil_products_album.json"
+                                download="fassil_products_album.json"
+                                className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer text-decoration-none"
+                                title="تحميل كتالوج المنتجات بنظام الألبوم JSON (images array & image)"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                                <span>تحميل JSON الألبوم (Images Array)</span>
+                              </a>
+
                               <button
                                 type="button"
                                 onClick={() => {
@@ -3805,7 +3815,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                           <thead>
                             <tr className="bg-[#fff8f5] border-b border-[#f7dfe8] text-[#4a2b3d] font-black">
                               <th className="p-3 w-10 text-center text-[#8a6b7a]">#</th>
-                              <th className="p-3 w-16 text-center">الصورة</th>
+                              <th className="p-3 min-w-[80px] text-center">ألبوم الصور</th>
                               <th className="p-3 min-w-[200px]">اسم المنتج (Title)</th>
                               <th className="p-3 min-w-[130px]">الصنف (Category)</th>
                               <th className="p-3 min-w-[120px]">السعر (Price)</th>
@@ -3823,16 +3833,31 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                                   {idx + 1}
                                 </td>
                                 <td className="p-3 text-center">
-                                  <img
-                                    src={
-                                      prod.images[0] ||
-                                      'https://raw.githubusercontent.com/dahmrisadik60-png/rozaketchendz/main/public/images/bissell-1.webp'
-                                    }
-                                    alt={prod.title}
-                                    className="w-12 h-12 rounded-xl object-cover bg-[#fff8f5] border border-[#f7dfe8] mx-auto shadow-2xs"
-                                    loading="lazy"
-                                    decoding="async"
-                                  />
+                                  {prod.images && prod.images.length > 1 ? (
+                                    <div className="product-gallery flex items-center justify-center gap-1.5 overflow-x-auto max-w-[140px] py-1 mx-auto">
+                                      {prod.images.map((imgUrl, imgIdx) => (
+                                        <img
+                                          key={imgIdx}
+                                          src={imgUrl}
+                                          alt={`${prod.title} - ${imgIdx + 1}`}
+                                          className="w-10 h-10 rounded-lg object-cover bg-[#fff8f5] border border-[#f7dfe8] shrink-0 hover:scale-105 transition-transform"
+                                          loading="lazy"
+                                          decoding="async"
+                                        />
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <img
+                                      src={
+                                        (prod.images && prod.images[0]) ||
+                                        'https://raw.githubusercontent.com/dahmrisadik60-png/rozaketchendz/main/public/images/bissell-1.webp'
+                                      }
+                                      alt={prod.title}
+                                      className="w-12 h-12 rounded-xl object-cover bg-[#fff8f5] border border-[#f7dfe8] mx-auto shadow-2xs"
+                                      loading="lazy"
+                                      decoding="async"
+                                    />
+                                  )}
                                 </td>
                                 <td className="p-3">
                                   <div className="font-bold text-[#4a2b3d] line-clamp-2 leading-relaxed">

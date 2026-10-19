@@ -356,6 +356,7 @@ export function transformToActiveProduct(
     price?: string | number;
     oldPrice?: string | number;
     image?: string;
+    images?: string[];
     url?: string;
     category?: string;
   },
@@ -376,9 +377,17 @@ export function transformToActiveProduct(
 
   const id = `prod-extracted-${cleanSlug || 'item'}-${index + 1}`;
 
-  const image = item.image && item.image.startsWith('http')
-    ? item.image
-    : 'https://i0.wp.com/fassil.shop/wp-content/uploads/2026/08/FASSIL-SHOP-26.webp?w=2318&ssl=1';
+  const rawImages = (item.images && Array.isArray(item.images) && item.images.length > 0)
+    ? item.images
+    : (item.image ? [item.image] : []);
+
+  const validImages = rawImages
+    .map((img) => (typeof img === 'string' ? img.trim() : ''))
+    .filter((img) => img.startsWith('http') || img.startsWith('/'));
+
+  const finalImages = validImages.length > 0
+    ? validImages
+    : ['https://i0.wp.com/fassil.shop/wp-content/uploads/2026/08/FASSIL-SHOP-26.webp?w=2318&ssl=1'];
 
   return {
     id,
@@ -388,7 +397,7 @@ export function transformToActiveProduct(
     price: parsedPrice,
     originalPrice: parsedOldPrice && parsedOldPrice > parsedPrice ? parsedOldPrice : Math.round(parsedPrice * 1.15),
     currency: 'د.ج',
-    images: [image],
+    images: finalImages,
     keyPoints: [
       `أصلي 100% معتمد مع ضمان الجودة والأداء العالي.`,
       `تصنيف رسمي ضمن قسم ${catDef.name} لتلبية احتياجاتك اليومية بكفاءة.`,

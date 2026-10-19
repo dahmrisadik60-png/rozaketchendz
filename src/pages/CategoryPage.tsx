@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { BeautyProduct, ProductCategory } from '../types';
 import { ProductCard } from '../components/ProductCard';
@@ -22,6 +22,28 @@ export const CategoryPage: React.FC<CategoryPageProps> = ({
   const category = useMemo(() => {
     return categories.find((c) => c.slug === slug);
   }, [categories, slug]);
+
+  useEffect(() => {
+    const categoryName = category?.name || slug || 'الأقسام';
+    document.title = `${categoryName} | متجر ROZA BEAUTY DZ في الجزائر`;
+    
+    let canonical = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+    if (canonical) {
+      canonical.setAttribute('href', `https://roza-dz.ai.studio/category/${slug}`);
+    }
+
+    let metaDesc = document.querySelector('meta[name="description"]') as HTMLMetaElement | null;
+    if (metaDesc) {
+      metaDesc.setAttribute('content', `تسوقي تشكيلة ${categoryName} الأصلية من متجر ROZA BEAUTY DZ في الجزائر. أجهزة أصلية مع ضمان رسمي وتوصيل سريع لـ 69 ولاية والدفع عند الاستلام.`);
+    }
+
+    return () => {
+      document.title = 'ROZA BEAUTY DZ | المتجر الرسمي للأجهزة والجمال في الجزائر - الدفع عند الاستلام';
+      if (canonical) {
+        canonical.setAttribute('href', 'https://roza-dz.ai.studio/');
+      }
+    };
+  }, [category, slug]);
 
   const filteredProducts = useMemo(() => {
     let list = products.filter((p) => {

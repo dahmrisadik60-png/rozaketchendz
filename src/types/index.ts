@@ -40,6 +40,7 @@ export interface BeautyProduct {
   originalPrice?: number;
   currency: string;
   images: string[];
+  image?: string;
   keyPoints: string[];
   keyPointsTitle?: string;
   specs: { label: string; value: string }[];

@@ -80,7 +80,7 @@ export const ProductCard: React.FC<ProductCardProps> = React.memo(({
             product.images[0] ||
             'https://raw.githubusercontent.com/dahmrisadik60-png/rozaketchendz/main/public/images/bissell-1.webp'
           }
-          alt={product.title}
+          alt={`${product.title} - متجر ROZA BEAUTY DZ الجزائر | أصلي 100% مع ضمان وتوصيل 69 ولاية`}
           className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
           loading="lazy"
           decoding="async"
