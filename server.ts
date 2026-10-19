@@ -371,6 +371,46 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
+/**
+ * Direct static sitemap.xml handler
+ * Explicitly serves sitemap.xml with Content-Type: application/xml
+ * ensuring it is never caught by the SPA index.html fallback route
+ */
+app.get('/sitemap.xml', (_req: Request, res: Response) => {
+  const possiblePaths = [
+    path.resolve(process.cwd(), 'public/sitemap.xml'),
+    path.resolve(process.cwd(), 'dist/sitemap.xml'),
+  ];
+
+  for (const sPath of possiblePaths) {
+    if (fs.existsSync(sPath)) {
+      res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+      return res.sendFile(sPath);
+    }
+  }
+
+  return res.status(404).type('text/plain').send('sitemap.xml not found');
+});
+
+/**
+ * Direct static robots.txt handler
+ */
+app.get('/robots.txt', (_req: Request, res: Response) => {
+  const possiblePaths = [
+    path.resolve(process.cwd(), 'public/robots.txt'),
+    path.resolve(process.cwd(), 'dist/robots.txt'),
+  ];
+
+  for (const rPath of possiblePaths) {
+    if (fs.existsSync(rPath)) {
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      return res.sendFile(rPath);
+    }
+  }
+
+  return res.status(404).type('text/plain').send('robots.txt not found');
+});
+
 async function startServer() {
   if (!isProduction) {
     // Development mode with Vite middleware
