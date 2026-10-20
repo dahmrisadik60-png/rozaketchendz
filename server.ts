@@ -359,6 +359,60 @@ app.post('/api/import-products', (req: Request, res: Response) => {
 });
 
 /**
+ * نقطة النهاية: /api/clear-all-products
+ * تفريغ وحذف جميع المنتجات بالكامل من ملفات fassil_products_album.json و fassilProducts.json والـ CSV
+ */
+app.post('/api/clear-all-products', (_req: Request, res: Response) => {
+  try {
+    const emptyJson = JSON.stringify([], null, 2);
+
+    // List of product JSON targets to clear
+    const targetJsonFiles = [
+      path.resolve(process.cwd(), 'src/data/fassil_products_album.json'),
+      path.resolve(process.cwd(), 'public/fassil_products_album.json'),
+      path.resolve(process.cwd(), 'fassil_products_album.json'),
+      path.resolve(process.cwd(), 'src/data/fassilProducts.json'),
+      path.resolve(process.cwd(), 'dist/fassil_products_album.json'),
+    ];
+
+    targetJsonFiles.forEach((fp) => {
+      try {
+        fs.writeFileSync(fp, emptyJson, 'utf8');
+      } catch (err) {
+        console.warn('Could not reset file:', fp, err);
+      }
+    });
+
+    // Reset CSV files to empty header
+    const emptyCsv = '\uFEFF"Title","Price","Category","Title_URL","Image"\r\n';
+    const targetCsvFiles = [
+      path.resolve(process.cwd(), 'public/cleaned_fassil.csv'),
+      path.resolve(process.cwd(), 'cleaned_fassil.csv'),
+      path.resolve(process.cwd(), 'dist/cleaned_fassil.csv'),
+    ];
+
+    targetCsvFiles.forEach((fp) => {
+      try {
+        fs.writeFileSync(fp, emptyCsv, 'utf8');
+      } catch (err) {
+        console.warn('Could not reset CSV:', fp, err);
+      }
+    });
+
+    console.log('🗑️ تم تفريغ وحذف جميع المنتجات من كافة ملفات الكتالوج بنجاح!');
+
+    return res.json({
+      success: true,
+      message: 'تم حذف جميع المنتجات بنجاح. القائمة فارغة الآن.',
+      count: 0,
+    });
+  } catch (err: any) {
+    console.error('Error in /api/clear-all-products:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
  * Health check endpoint
  */
 app.get('/api/health', (_req, res) => {

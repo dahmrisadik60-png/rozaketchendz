@@ -182,6 +182,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   // Form helpers for catalog product categories
   const [isAddingNewCategoryInline, setIsAddingNewCategoryInline] = useState(false);
   const [inlineNewCategoryName, setInlineNewCategoryName] = useState('');
+  const [isDeletingAllProducts, setIsDeletingAllProducts] = useState(false);
 
   // Products Catalog Search & Filtering states
   const [productSearchQuery, setProductSearchQuery] = useState('');
@@ -598,6 +599,72 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     } finally {
       setIsImportingExtracted(false);
     }
+  };
+
+  /**
+   * حذف وتفريغ جميع المنتجات نهائياً من المتجر وقاعدة البيانات
+   * مع تأكيد مزدوج (Double-Confirmation) لمنع الضغط غير المقصود
+   */
+  const handleDeleteAllProducts = () => {
+    if (localProductsList.length === 0) {
+      showNotice('قائمة المنتجات فارغة بالفعل!');
+      return;
+    }
+
+    const totalCount = localProductsList.length;
+
+    // التأكيد الأول (First Confirmation Modal)
+    setConfirmDialog({
+      isOpen: true,
+      title: '⚠️ تحذير: حذف جميع المنتجات نهائياً',
+      message: `هل أنت متأكد من رغبتك في حذف جميع المنتجات نهائياً؟ (${totalCount} منتج). سيتم تفريغ كتالوج المنتجات وملفات fassil_products_album.json وقاعدة البيانات بالكامل.`,
+      confirmText: 'نعم، متابعة الحذف',
+      onConfirm: () => {
+        // التأكيد الثاني الحاسم (Double-Confirmation)
+        setTimeout(() => {
+          setConfirmDialog({
+            isOpen: true,
+            title: '🚨 تأكيد أخير وحاسم (Double-Confirmation)',
+            message: `تنبيه أخير: أنت على وشك حذف كافة الـ ${totalCount} منتج دفعة واحدة. هذا الإجراء فوري ونهائي ولا يمكن التراجع عنه مطلقاً! هل أنت متأكد بنسبة 100%؟`,
+            confirmText: 'نعم، احذف جميع المنتجات الآن',
+            onConfirm: async () => {
+              setIsDeletingAllProducts(true);
+              try {
+                // 1. استدعاء السيرفر لتفريغ ملفات JSON (fassil_products_album.json) والـ CSV
+                try {
+                  await fetch('/api/clear-all-products', { method: 'POST' });
+                } catch (apiErr) {
+                  console.warn('Backend clear products error:', apiErr);
+                }
+
+                // 2. تفريغ حالة المنتجات في المتجر والذاكرة المحلية
+                const emptyList: BeautyProduct[] = [];
+                setLocalProductsList(emptyList);
+                saveStoredCatalogProducts(emptyList);
+
+                // 3. تحديث الصفحة الرئيسية والمكونات المرتبطة فوراً
+                if (onProductsUpdated) {
+                  onProductsUpdated(emptyList);
+                }
+
+                // 4. حذف المنتجات من Firestore في الخلفية
+                for (const prod of localProductsList) {
+                  deleteCatalogProduct(prod.id).catch(() => {});
+                }
+
+                // 5. إشعار نجاح فوري للمستخدم
+                showNotice('تم حذف جميع المنتجات بنجاح. القائمة فارغة الآن.');
+              } catch (err: any) {
+                console.error('Failed to delete all products:', err);
+                showNotice('حدث خطأ أثناء محاولة تفريغ المنتجات.');
+              } finally {
+                setIsDeletingAllProducts(false);
+              }
+            }
+          });
+        }, 120);
+      }
+    });
   };
 
   const handleCatalogFileUpload = async (files: FileList | File[] | null) => {
@@ -2189,6 +2256,18 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                         <Plus className="w-4 h-4" />
                         <span>إضافة منتج جديد</span>
                       </button>
+
+                      {/* زر حذف جميع المنتجات نهائياً البارز مع تأكيد مزدوج */}
+                      <button
+                        type="button"
+                        onClick={handleDeleteAllProducts}
+                        disabled={isDeletingAllProducts || localProductsList.length === 0}
+                        className="px-4 py-2 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-sm hover:shadow-md transition-all cursor-pointer"
+                        title="حذف وتفريغ جميع المنتجات نهائياً من المتجر وقاعدة البيانات"
+                      >
+                        <Trash2 className="w-4 h-4 stroke-[2.2]" />
+                        <span>{isDeletingAllProducts ? 'جاري الحذف...' : 'حذف جميع المنتجات'}</span>
+                      </button>
                     </div>
                   </div>
 
@@ -3777,33 +3856,52 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Empty Search State */}
+                  {/* Empty Search / Catalog State */}
                   {filteredProductsList.length === 0 && (
                     <div className="bg-white rounded-2xl p-8 border border-[#f7dfe8] shadow-xs text-center flex flex-col items-center justify-center gap-3">
                       <div className="w-14 h-14 rounded-2xl bg-[#fdeaf1] text-[#d94f86] flex items-center justify-center mb-1">
-                        <Search className="w-7 h-7" />
+                        {localProductsList.length === 0 ? <Trash2 className="w-7 h-7 text-rose-500" /> : <Search className="w-7 h-7" />}
                       </div>
                       <h4 className="font-bold text-sm text-[#4a2b3d]">
-                        لم يتم العثور على أي منتج يطابق بحثك
+                        {localProductsList.length === 0 
+                          ? 'قائمة المنتجات فارغة حالياً (0 منتج)'
+                          : 'لم يتم العثور على أي منتج يطابق بحثك'
+                        }
                       </h4>
                       <p className="text-xs text-[#8a6b7a] max-w-md">
-                        {productSearchQuery ? (
+                        {localProductsList.length === 0 ? (
+                          'تم تفريغ كتالوج المنتجات بالكامل بنجاح. يمكنك إضافة منتج جديد أو استيراد كتالوج المنتجات في أي وقت.'
+                        ) : productSearchQuery ? (
                           <>لا توجد نتائج مطابقة لعبارة البحث: <span className="font-bold text-[#d94f86]">"{productSearchQuery}"</span></>
                         ) : (
                           'لا توجد منتجات مسجلة في هذا القسم حالياً.'
                         )}
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setProductSearchQuery('');
-                          setProductCategoryFilter('all');
-                        }}
-                        className="mt-2 px-4 py-2 bg-[#d94f86] hover:bg-[#c93d78] text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5" />
-                        <span>مسح شريط البحث وإظهار كل المنتجات</span>
-                      </button>
+                      {localProductsList.length === 0 ? (
+                        <div className="flex items-center gap-2 mt-2 flex-wrap justify-center">
+                          <button
+                            type="button"
+                            onClick={handleImportFassilCatalog}
+                            disabled={isImportingFassil}
+                            className="px-4 py-2 bg-[#d94f86] hover:bg-[#c93d78] text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                          >
+                            <UploadCloud className="w-3.5 h-3.5" />
+                            <span>استيراد كتالوج المنتجات من جديد</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProductSearchQuery('');
+                            setProductCategoryFilter('all');
+                          }}
+                          className="mt-2 px-4 py-2 bg-[#d94f86] hover:bg-[#c93d78] text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>مسح شريط البحث وإظهار كل المنتجات</span>
+                        </button>
+                      )}
                     </div>
                   )}
 
