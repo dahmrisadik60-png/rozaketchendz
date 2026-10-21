@@ -111,7 +111,6 @@ export const HomePage: React.FC<HomePageProps> = ({
                   <ProductCard
                     key={p.id}
                     product={p}
-                    onDirectOrder={onDirectOrder}
                   />
                 ))}
               </div>
@@ -133,7 +132,6 @@ export const HomePage: React.FC<HomePageProps> = ({
                 key={cat.id}
                 category={cat}
                 products={catProds}
-                onDirectOrder={onDirectOrder}
               />
             );
           })

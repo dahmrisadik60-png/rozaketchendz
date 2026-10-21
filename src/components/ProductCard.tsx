@@ -1,43 +1,28 @@
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Heart, ShoppingBag, Star, ShoppingCart } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Heart, Star, ShoppingCart } from 'lucide-react';
 import { BeautyProduct } from '../types';
 import { useCart } from '../context/CartContext';
 
 interface ProductCardProps {
   product: BeautyProduct;
-  onDirectOrder?: (product: BeautyProduct) => void;
   compact?: boolean;
 }
 
 export const ProductCard: React.FC<ProductCardProps> = React.memo(({ 
   product, 
-  onDirectOrder,
   compact = false 
 }) => {
   const { addToCart, toggleFavorite, isFavorite } = useCart();
   const favorited = isFavorite(product.id);
-  const navigate = useNavigate();
 
-  // Has discount?
   const hasDiscount =
     Boolean(product.originalPrice && product.originalPrice > product.price);
-
-  const handleBuyNow = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (onDirectOrder) {
-      onDirectOrder(product);
-    } else {
-      navigate(`/product/${product.id}`);
-    }
-  };
 
   return (
     <div className="group bg-white rounded-2xl border border-[#f7dfe8] hover:border-[#d94f86]/50 shadow-[0_4px_15px_rgba(217,79,134,0.06)] hover:shadow-[0_8px_25px_rgba(217,79,134,0.18)] transition-all duration-300 flex flex-col justify-between overflow-hidden relative h-full">
       {/* Top badges & Favorite heart */}
       <div className="absolute top-2 left-2 right-2 z-10 flex items-center justify-between pointer-events-none">
-        {/* Right badge in RTL: "PROMO !" in brand rose #d94f86 */}
         <div className="pointer-events-auto">
           {hasDiscount ? (
             <span className="px-2 py-0.5 rounded-lg bg-[#d94f86] text-white text-[10px] sm:text-[11px] font-black tracking-wide shadow-xs">
@@ -50,7 +35,6 @@ export const ProductCard: React.FC<ProductCardProps> = React.memo(({
           ) : <span />}
         </div>
 
-        {/* Left heart in RTL */}
         <button
           type="button"
           onClick={(e) => {
@@ -70,17 +54,17 @@ export const ProductCard: React.FC<ProductCardProps> = React.memo(({
         </button>
       </div>
 
-      {/* Product Image Link */}
       <Link
         to={`/product/${product.id}`}
         className="block relative aspect-square bg-[#fff8f5] overflow-hidden shrink-0"
+        aria-label={`شاهد تفاصيل ${product.title}`}
       >
         <img
           src={
             product.images[0] ||
             'https://raw.githubusercontent.com/dahmrisadik60-png/rozaketchendz/main/public/images/bissell-1.webp'
           }
-          alt={`${product.title} - متجر ROZA BEAUTY DZ الجزائر | أصلي 100% مع ضمان وتوصيل 69 ولاية`}
+          alt={`${product.title}`}
           width={300}
           height={300}
           className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
@@ -97,36 +81,25 @@ export const ProductCard: React.FC<ProductCardProps> = React.memo(({
       {/* Content & Details */}
       <div className="p-2.5 sm:p-3.5 flex-1 flex flex-col justify-between gap-2 text-right">
         <div>
-          {/* Brand & Category */}
           <div className="flex items-center justify-between text-[10px] text-[#8a6b7a] mb-0.5">
             <span className="text-[#d94f86] font-bold truncate max-w-[80px]">
               {product.brandName || 'Roza Beauty'}
             </span>
-            {product.categoryName && (
-              <span className="truncate max-w-[70px]">{product.categoryName}</span>
-            )}
+            <div className="flex items-center gap-0.5 text-[#f9d784]">
+              <Star className="w-3 h-3 fill-current" />
+              <span className="text-[#4a2b3d] font-bold">{product.rating.toFixed(1)}</span>
+            </div>
           </div>
 
-          {/* Product Title in max 2 lines with "..." */}
-          <Link
-            to={`/product/${product.id}`}
+          <h3
             className="font-bold text-xs sm:text-sm text-[#4a2b3d] hover:text-[#d94f86] transition-colors line-clamp-2 leading-snug min-h-[2.3rem]"
             title={product.title}
           >
-            {product.title}
-          </Link>
-
-          {/* Rating */}
-          <div className="flex items-center gap-1 mt-1 text-[11px] text-[#8a6b7a]">
-            <Star className="w-3 h-3 fill-[#c9a45c] text-[#c9a45c]" />
-            <span className="font-bold text-[#4a2b3d]">{(product.rating || 5.0).toFixed(1)}</span>
-            <span className="text-[#8a6b7a]">({product.reviewsCount || 0})</span>
-          </div>
+            <Link to={`/product/${product.id}`}>{product.title}</Link>
+          </h3>
         </div>
 
-        {/* Pricing & Full-width "اشتر الآن" button */}
         <div className="pt-2 border-t border-[#f7dfe8] flex flex-col gap-2">
-          {/* Price display: Old price strikethrough in gray, new price in brand #d94f86 */}
           <div className="flex flex-col">
             {hasDiscount && (
               <span className="text-[11px] text-[#8a6b7a] line-through font-semibold leading-none">
@@ -138,18 +111,14 @@ export const ProductCard: React.FC<ProductCardProps> = React.memo(({
             </span>
           </div>
 
-          {/* Action: Full-width button in brand color #d94f86 "اشتر الآن" */}
           <div className="flex items-center gap-1.5 w-full">
-            <button
-              type="button"
-              onClick={handleBuyNow}
-              className="flex-1 py-2 sm:py-2.5 px-2.5 rounded-xl bg-[#d94f86] hover:bg-[#c93d78] text-white font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-xs shadow-rose-900/15 active:scale-98 transition-all cursor-pointer"
+            <Link
+              to={`/product/${product.id}`}
+              className="flex-1 py-2 sm:py-2.5 px-2.5 rounded-xl bg-[#d94f86] hover:bg-[#c93d78] text-white font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-xs shadow-rose-900/15 active:scale-98 transition-all text-center"
             >
-              <ShoppingBag className="w-3.5 h-3.5" />
-              <span>اشتر الآن</span>
-            </button>
+              <span>شاهد التفاصيل</span>
+            </Link>
 
-            {/* Quick Add to Cart icon button */}
             <button
               type="button"
               onClick={(e) => {

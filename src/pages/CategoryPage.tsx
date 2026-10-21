@@ -135,7 +135,6 @@ export const CategoryPage: React.FC<CategoryPageProps> = ({
             <ProductCard
               key={p.id}
               product={p}
-              onDirectOrder={onDirectOrder}
             />
           ))}
         </div>

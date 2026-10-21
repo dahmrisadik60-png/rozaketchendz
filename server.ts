@@ -413,6 +413,54 @@ app.post('/api/clear-all-products', (_req: Request, res: Response) => {
 });
 
 /**
+ * نقطة النهاية: /api/delete-product/:id
+ * حذف منتج مفرد نهائياً من ملفات JSON والكتالوج لمنع عودته بعد التحديث
+ */
+app.post('/api/delete-product/:id', (req: Request, res: Response) => {
+  try {
+    const targetId = req.params.id;
+    if (!targetId) {
+      return res.status(400).json({ success: false, error: 'Product ID required' });
+    }
+
+    const targetJsonFiles = [
+      path.resolve(process.cwd(), 'src/data/fassil_products_album.json'),
+      path.resolve(process.cwd(), 'public/fassil_products_album.json'),
+      path.resolve(process.cwd(), 'fassil_products_album.json'),
+      path.resolve(process.cwd(), 'src/data/fassilProducts.json'),
+      path.resolve(process.cwd(), 'dist/fassil_products_album.json'),
+    ];
+
+    targetJsonFiles.forEach((fp) => {
+      try {
+        if (fs.existsSync(fp)) {
+          const raw = fs.readFileSync(fp, 'utf8');
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            const filtered = list.filter((item: any, idx: number) => {
+              const itemId = String(item.id || '');
+              const itemSlug = `prod-extracted-${(item.title || '')
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '')
+                .slice(0, 50) || 'item'}-${idx + 1}`;
+              return itemId !== targetId && itemSlug !== targetId && item.id !== Number(targetId);
+            });
+            fs.writeFileSync(fp, JSON.stringify(filtered, null, 2), 'utf8');
+          }
+        }
+      } catch (err) {
+        console.warn('Could not filter file:', fp, err);
+      }
+    });
+
+    return res.json({ success: true, message: `Product ${targetId} permanently removed` });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
  * Health check endpoint
  */
 app.get('/api/health', (_req, res) => {

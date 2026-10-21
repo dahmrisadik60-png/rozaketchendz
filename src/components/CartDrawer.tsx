@@ -81,13 +81,9 @@ export const CartDrawer: React.FC = () => {
                 {/* Details */}
                 <div className="flex-1 min-w-0 flex flex-col justify-between">
                   <div className="flex items-start justify-between gap-2">
-                    <Link
-                      to={`/product/${product.id}`}
-                      onClick={() => setIsCartDrawerOpen(false)}
-                      className="font-bold text-xs sm:text-sm text-[#4a2b3d] hover:text-[#d94f86] line-clamp-2 leading-tight"
-                    >
+                    <span className="font-bold text-xs sm:text-sm text-[#4a2b3d] line-clamp-2 leading-tight">
                       {product.title}
-                    </Link>
+                    </span>
                     <button
                       type="button"
                       onClick={() => removeFromCart(product.id)}

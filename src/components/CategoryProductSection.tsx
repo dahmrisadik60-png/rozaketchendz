@@ -7,13 +7,11 @@ import { ProductCard } from './ProductCard';
 interface CategoryProductSectionProps {
   category: ProductCategory;
   products: BeautyProduct[];
-  onDirectOrder: (product: BeautyProduct) => void;
 }
 
 export const CategoryProductSection: React.FC<CategoryProductSectionProps> = React.memo(({
   category,
-  products,
-  onDirectOrder
+  products
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -41,7 +39,6 @@ export const CategoryProductSection: React.FC<CategoryProductSectionProps> = Rea
     if (!scrollRef.current) return;
     const el = scrollRef.current;
     const itemWidth = el.scrollWidth / products.length;
-    // Scroll in RTL smoothly
     el.scrollTo({
       left: -(idx * itemWidth),
       behavior: 'smooth'
@@ -51,7 +48,6 @@ export const CategoryProductSection: React.FC<CategoryProductSectionProps> = Rea
 
   return (
     <section className="flex flex-col gap-3 sm:gap-4">
-      {/* 5) Section Header: Bold title on right + "مشاهدة الكل" on left with #d94f86 underline */}
       <div className="flex items-center justify-between pb-2 border-b border-[#f7dfe8]">
         <div>
           <h2 className="text-lg sm:text-2xl font-black text-[#4a2b3d] flex items-center gap-2">
@@ -65,7 +61,6 @@ export const CategoryProductSection: React.FC<CategoryProductSectionProps> = Rea
           )}
         </div>
 
-        {/* "مشاهدة الكل" with underline in identity color #d94f86 */}
         <Link
           to={`/category/${category.slug}`}
           className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-black text-[#d94f86] pb-0.5 border-b-2 border-[#d94f86] hover:opacity-80 transition-all group"
@@ -75,7 +70,6 @@ export const CategoryProductSection: React.FC<CategoryProductSectionProps> = Rea
         </Link>
       </div>
 
-      {/* 5.b) Mobile Horizontal Slider (scroll-snap, 2 cards visible, 3rd peeking out) */}
       <div className="md:hidden flex flex-col">
         <div
           ref={scrollRef}
@@ -88,13 +82,11 @@ export const CategoryProductSection: React.FC<CategoryProductSectionProps> = Rea
             >
               <ProductCard
                 product={product}
-                onDirectOrder={onDirectOrder}
               />
             </div>
           ))}
         </div>
 
-        {/* Pagination Dots: Active is elongated rectangle in #d94f86, others are soft rose circles */}
         {products.length > 1 && (
           <div className="flex items-center justify-center gap-1.5 pt-2">
             {products.map((_, idx) => (
@@ -114,13 +106,11 @@ export const CategoryProductSection: React.FC<CategoryProductSectionProps> = Rea
         )}
       </div>
 
-      {/* 5.c) Desktop Grid View (for screen width >= 768px) */}
       <div className="hidden md:grid md:grid-cols-3 lg:grid-cols-4 gap-5">
         {products.map((product) => (
           <ProductCard
             key={product.id}
             product={product}
-            onDirectOrder={onDirectOrder}
           />
         ))}
       </div>

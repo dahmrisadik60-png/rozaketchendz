@@ -44,6 +44,7 @@ import { ROZA_BEAUTY_PRODUCT } from '../data/products';
 import { CSV_IMPORTED_PRODUCTS } from '../data/importedProducts';
 import { ALGERIAN_CUSTOMER_REVIEWS } from '../data/reviews';
 import { DEFAULT_CATEGORIES, DEFAULT_BANNER } from '../data/categories';
+import { getDeletedProductIds } from './storage';
 
 export const ADMIN_EMAIL = 'dahmrisadik60@gmail.com';
 
@@ -699,11 +700,19 @@ export async function runStorefrontMigration(): Promise<void> {
         stockCount: 60
       };
 
-      await saveCatalogProduct(primaryProduct);
-      await saveCatalogProduct(companionProduct);
+      const deletedIds = getDeletedProductIds();
+
+      if (!deletedIds.has(String(primaryProduct.id))) {
+        await saveCatalogProduct(primaryProduct);
+      }
+      if (!deletedIds.has(String(companionProduct.id))) {
+        await saveCatalogProduct(companionProduct);
+      }
 
       for (const importedProd of CSV_IMPORTED_PRODUCTS) {
-        await saveCatalogProduct(importedProd);
+        if (!deletedIds.has(String(importedProd.id))) {
+          await saveCatalogProduct(importedProd);
+        }
       }
 
       // Save categories

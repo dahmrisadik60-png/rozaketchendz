@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { 
   BeautyProduct, 
   Order, 
-  CustomerReview, 
+  CustomerReview,
   ProductCategory, 
   StoreBanner 
 } from './types';
@@ -11,17 +11,18 @@ import {
   getStoredProduct, 
   getStoredOrders, 
   saveStoredProduct, 
-  getStoredReviews, 
+  getStoredReviews,
   saveStoredReviews,
   getStoredCatalogProducts,
   saveStoredCatalogProducts,
   getStoredCategories,
-  saveStoredCategories
+  saveStoredCategories,
+  getDeletedProductIds
 } from './services/storage';
 import { TrackingService, initPixels, setRuntimePixelConfig, initTrafficSource } from './services/tracking';
 import { 
   subscribeToProduct, 
-  subscribeToReviews, 
+  subscribeToReviews,
   subscribeToPixelConfig,
   subscribeToProducts,
   subscribeToCategories,
@@ -47,7 +48,6 @@ const AdminModal = lazy(() => import('./components/AdminModal').then(m => ({ def
 
 import { DEFAULT_CATEGORIES, DEFAULT_BANNER } from './data/categories';
 import { ROZA_BEAUTY_PRODUCT } from './data/products';
-import { FASSIL_STORE_PRODUCTS } from './data/fassilCatalog';
 
 export default function App() {
   const [product, setProduct] = useState<BeautyProduct | null>(null);
@@ -62,7 +62,7 @@ export default function App() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [reviews, setReviews] = useState<CustomerReview[]>([]);
 
-  // Direct buy popup modal state (same behavior as before)
+  // Direct buy popup modal state
   const [modalProduct, setModalProduct] = useState<BeautyProduct | null>(null);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
@@ -72,6 +72,8 @@ export default function App() {
     if (typeof window === 'undefined') return false;
     return window.location.pathname === '/admin' || window.location.hash === '#admin';
   });
+  
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   useEffect(() => {
     const handleUrlCheck = () => {
@@ -88,6 +90,11 @@ export default function App() {
     };
   }, []);
 
+  const handleOpenDirectOrder = useCallback((targetProduct: BeautyProduct) => {
+    setModalProduct(targetProduct);
+    setIsOrderModalOpen(true);
+  }, []);
+
   useEffect(() => {
     // 1. Initial local load
     const loadedProduct = getStoredProduct();
@@ -97,14 +104,8 @@ export default function App() {
     setOrders(loadedOrders);
     setReviews(loadedReviews);
 
-    // Initial products fallback: keep stored catalog products if any exist
-    const storedCatalog = getStoredCatalogProducts();
-    if (storedCatalog && storedCatalog.length > 0) {
-      setProductsList(storedCatalog);
-    } else if (loadedProduct) {
-      setProductsList([loadedProduct]);
-      saveStoredCatalogProducts([loadedProduct]);
-    }
+    // Initial products fallback: skip old catalog products, start empty to prevent FOUC
+    setProductsList([]);
 
     // 2. Initialize Traffic Source (UTM) & Pixels
     initTrafficSource();
@@ -121,10 +122,13 @@ export default function App() {
     });
 
     const unsubProducts = subscribeToProducts((allProds) => {
-      if (allProds.length > 0) {
-        setProductsList(allProds);
-        saveStoredCatalogProducts(allProds);
-      } else if (localStorage.getItem('roza_catalog_cleared') === 'true') {
+      setIsInitialLoading(false);
+      const deletedIds = getDeletedProductIds();
+      const filtered = allProds.filter((p) => !deletedIds.has(String(p.id)));
+      if (filtered.length > 0) {
+        setProductsList(filtered);
+        saveStoredCatalogProducts(filtered);
+      } else if (localStorage.getItem('roza_catalog_cleared') === 'true' || allProds.length === 0) {
         setProductsList([]);
         saveStoredCatalogProducts([]);
       }
@@ -160,11 +164,6 @@ export default function App() {
     };
   }, []);
 
-  const handleOpenDirectOrder = useCallback((targetProduct: BeautyProduct) => {
-    setModalProduct(targetProduct);
-    setIsOrderModalOpen(true);
-  }, []);
-
   const handleOrderSubmitted = useCallback((newOrder: Order) => {
     setOrders((prev) => [newOrder, ...prev]);
     setCompletedOrder(newOrder);
@@ -192,8 +191,10 @@ export default function App() {
   }, []);
 
   const handleCatalogUpdated = useCallback((updated: BeautyProduct[]) => {
-    setProductsList(updated);
-    saveStoredCatalogProducts(updated);
+    const deletedIds = getDeletedProductIds();
+    const cleanList = updated.filter((p) => !deletedIds.has(String(p.id)));
+    setProductsList(cleanList);
+    saveStoredCatalogProducts(cleanList);
   }, []);
 
   const handleCategoriesUpdated = useCallback((updated: ProductCategory[]) => {
@@ -202,32 +203,35 @@ export default function App() {
   }, []);
 
   const activeProduct = product || ROZA_BEAUTY_PRODUCT;
-  // The categorized fassil.shop catalog (src/data/fassilProducts.json) ships with the site:
-  // products already saved in Firestore win, the rest are added automatically.
   const currentCatalog = productsList;
 
-  // Same for categories: make sure every default category exists even if Firestore has an older list
+  // Make sure every default category exists even if Firestore has an older list
   const currentCategories = useMemo(() => {
     const slugs = new Set(categories.map((c) => c.slug));
     return [...categories, ...DEFAULT_CATEGORIES.filter((c) => !slugs.has(c.slug))];
   }, [categories]);
 
+  if (isInitialLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#fff8f5]">
+        <div className="w-12 h-12 border-4 border-[#f7dfe8] border-t-[#d94f86] rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <BrowserRouter>
       <CartProvider>
         <div className="min-h-screen bg-[#fff8f5] text-[#4a2b3d] font-sans antialiased flex flex-col selection:bg-[#d94f86] selection:text-white">
-          {/* Official Header with Search, Cart Counter, Favorites, 0777413872 */}
           <Header
             onOpenAdminPrompt={() => setIsAdminOpen(true)}
             categories={currentCategories}
           />
 
-          {/* Slideout Cart Drawer */}
           <Suspense fallback={null}>
             <CartDrawer />
           </Suspense>
 
-          {/* Main App Container */}
           <main className="flex-1 max-w-6xl mx-auto w-full px-3.5 sm:px-6 py-4 sm:py-6">
             <Suspense fallback={
               <div className="min-h-[50vh] flex flex-col items-center justify-center p-8">
@@ -235,7 +239,6 @@ export default function App() {
               </div>
             }>
               <Routes>
-                {/* Home Page: Hero Banner, 4 Perks, Categories & Products Grid */}
                 <Route
                   path="/"
                   element={
@@ -248,7 +251,6 @@ export default function App() {
                   }
                 />
 
-                {/* Dynamic Product Page: Exact design of original landing page, dynamic for any id */}
                 <Route
                   path="/product/:id"
                   element={
@@ -261,7 +263,6 @@ export default function App() {
                   }
                 />
 
-                {/* Category Page with sorting & price filter */}
                 <Route
                   path="/category/:slug"
                   element={
@@ -273,10 +274,8 @@ export default function App() {
                   }
                 />
 
-                {/* Checkout Page: 69 wilayas, order notes, WhatsApp thank-you confirmation */}
                 <Route path="/checkout" element={<CheckoutPage />} />
 
-                {/* Admin Direct Route: opens AdminModal directly on /admin */}
                 <Route
                   path="/admin"
                   element={
@@ -289,13 +288,11 @@ export default function App() {
                   }
                 />
 
-                {/* Catch-all redirect to Home */}
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Suspense>
           </main>
 
-          {/* Direct Buy Popup Modal ("أطلب الآن" maintains exact original behavior) */}
           {modalProduct && (
             <Suspense fallback={null}>
               <OrderModal
@@ -307,7 +304,6 @@ export default function App() {
             </Suspense>
           )}
 
-          {/* Success Confirmation Modal */}
           {completedOrder && (
             <Suspense fallback={null}>
               <SuccessModal
@@ -317,7 +313,6 @@ export default function App() {
             </Suspense>
           )}
 
-          {/* Admin Dashboard (PIN 2009 + Google Auth dahmrisadik60@gmail.com) */}
           {isAdminOpen && (
             <Suspense fallback={null}>
               <AdminModal
@@ -343,7 +338,6 @@ export default function App() {
             </Suspense>
           )}
 
-          {/* Official Footer with 0777413872 contact & 69 wilayas */}
           <Footer 
             onOpenAdminPrompt={() => setIsAdminOpen(true)} 
             categories={currentCategories}

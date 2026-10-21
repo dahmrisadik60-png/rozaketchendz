@@ -21,7 +21,10 @@ import {
   saveStoredProduct, 
   saveStoredReviews,
   saveStoredCatalogProducts,
-  saveStoredCategories
+  saveStoredCategories,
+  markProductAsDeleted,
+  deleteStoredProduct,
+  markAllProductsAsDeleted
 } from '../services/storage';
 import { 
   getPixelConfig, 
@@ -80,8 +83,8 @@ interface AdminModalProps {
   onProductUpdated: (updatedProduct: BeautyProduct) => void;
   orders: Order[];
   onOrdersUpdated: (updatedOrders: Order[]) => void;
-  reviews: CustomerReview[];
-  onReviewsUpdated: (updatedReviews: CustomerReview[]) => void;
+  reviews?: CustomerReview[];
+  onReviewsUpdated?: (updatedReviews: CustomerReview[]) => void;
   products?: BeautyProduct[];
   onProductsUpdated?: (updatedProducts: BeautyProduct[]) => void;
   categories?: ProductCategory[];
@@ -108,7 +111,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   onProductUpdated,
   orders,
   onOrdersUpdated,
-  reviews,
+  reviews = [],
   onReviewsUpdated,
   products = [],
   onProductsUpdated,
@@ -124,7 +127,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   // Local synchronized state for immediate reactive UI updates
   const [localOrders, setLocalOrders] = useState<Order[]>(orders);
   const [localProduct, setLocalProduct] = useState<BeautyProduct>(product);
-  const [localReviews, setLocalReviews] = useState<CustomerReview[]>(reviews);
+  const [localReviews, setLocalReviews] = useState<CustomerReview[]>(reviews || []);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   const showNotice = (msg: string) => {
@@ -640,11 +643,9 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                   console.warn('Backend clear products error:', apiErr);
                 }
 
-                // 2. تفريغ حالة المنتجات في المتجر والذاكرة المحلية
+                // 2. تفريغ حالة المنتجات في المتجر والذاكرة المحلية نهائياً
+                markAllProductsAsDeleted();
                 const emptyList: BeautyProduct[] = [];
-                if (typeof window !== 'undefined') {
-                  localStorage.setItem('roza_catalog_cleared', 'true');
-                }
                 setLocalProductsList(emptyList);
                 saveStoredCatalogProducts(emptyList);
 
@@ -654,12 +655,10 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                 }
 
                 // 4. حذف المنتجات من Firestore في الخلفية
-                for (const prod of localProductsList) {
-                  deleteCatalogProduct(prod.id).catch(() => {});
-                }
+                await Promise.all(localProductsList.map(prod => deleteCatalogProduct(prod.id).catch(console.error)));
 
                 // 5. إشعار نجاح فوري للمستخدم
-                showNotice('تم حذف جميع المنتجات بنجاح. القائمة فارغة الآن.');
+                showNotice('تم حذف جميع المنتجات بنجاح. الكتالوج فارغ ولن تعود المنتجات بعد التحديث.');
               } catch (err: any) {
                 console.error('Failed to delete all products:', err);
                 showNotice('حدث خطأ أثناء محاولة تفريغ المنتجات.');
@@ -1354,7 +1353,9 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       await saveReviewsToFirestore(updated);
       setLocalReviews(updated);
       saveStoredReviews(updated);
-      onReviewsUpdated(updated);
+      if (onReviewsUpdated) {
+        onReviewsUpdated(updated);
+      }
 
       setNewReviewAuthor('');
       setNewReviewWilaya('');
@@ -1380,7 +1381,9 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       await saveReviewsToFirestore(updated);
       setLocalReviews(updated);
       saveStoredReviews(updated);
-      onReviewsUpdated(updated);
+      if (onReviewsUpdated) {
+        onReviewsUpdated(updated);
+      }
       showNotice('تم حذف التقييم من Firestore بنجاح.');
     } catch (err: unknown) {
       console.error('Failed to delete review in Firestore:', err);
@@ -1640,29 +1643,6 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                 <span>البانر الرئيسي</span>
               </button>
 
-              <button
-                onClick={() => setActiveTab('product')}
-                className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                  activeTab === 'product'
-                    ? 'border-[#d94f86] text-[#d94f86] bg-white rounded-t-xl shadow-xs'
-                    : 'border-transparent text-[#8a6b7a] hover:text-[#4a2b3d]'
-                }`}
-              >
-                <Settings className="w-4 h-4" />
-                <span>تفاصيل منتج الهبوط</span>
-              </button>
-
-              <button
-                onClick={() => setActiveTab('reviews')}
-                className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                  activeTab === 'reviews'
-                    ? 'border-[#d94f86] text-[#d94f86] bg-white rounded-t-xl shadow-xs'
-                    : 'border-transparent text-[#8a6b7a] hover:text-[#4a2b3d]'
-                }`}
-              >
-                <Heart className="w-4 h-4" />
-                <span>الآراء ({localReviews.length})</span>
-              </button>
 
               <button
                 onClick={() => setActiveTab('pixels')}
@@ -4043,13 +4023,14 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                                           message: `هل تريد حذف هذا المنتج (${prod.title}) نهائياً من المتجر وقاعدة البيانات؟`,
                                           confirmText: 'نعم احذف',
                                           onConfirm: async () => {
-                                            const nextList = localProductsList.filter((p) => p.id !== prod.id);
+                                            markProductAsDeleted(prod.id);
+                                            const nextList = deleteStoredProduct(prod.id);
                                             setLocalProductsList(nextList);
-                                            saveStoredCatalogProducts(nextList);
                                             if (onProductsUpdated) {
                                               onProductsUpdated(nextList);
                                             }
-                                            showNotice('تم حذف المنتج بنجاح.');
+                                            fetch(`/api/delete-product/${encodeURIComponent(prod.id)}`, { method: 'POST' }).catch(() => {});
+                                            showNotice('تم حذف المنتج نهائياً من المتجر والذاكرة ولن يعود للظهور مجدداً.');
 
                                             try {
                                               await deleteCatalogProduct(prod.id);
@@ -4158,13 +4139,14 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                                     message: `هل تريد حذف هذا المنتج (${prod.title}) نهائياً من المتجر وقاعدة البيانات؟`,
                                     confirmText: 'نعم احذف',
                                     onConfirm: async () => {
-                                      const nextList = localProductsList.filter((p) => p.id !== prod.id);
+                                      markProductAsDeleted(prod.id);
+                                      const nextList = deleteStoredProduct(prod.id);
                                       setLocalProductsList(nextList);
-                                      saveStoredCatalogProducts(nextList);
                                       if (onProductsUpdated) {
                                         onProductsUpdated(nextList);
                                       }
-                                      showNotice('تم حذف المنتج بنجاح.');
+                                      fetch(`/api/delete-product/${encodeURIComponent(prod.id)}`, { method: 'POST' }).catch(() => {});
+                                      showNotice('تم حذف المنتج نهائياً من المتجر والذاكرة ولن يعود للظهور مجدداً.');
 
                                       try {
                                         await deleteCatalogProduct(prod.id);

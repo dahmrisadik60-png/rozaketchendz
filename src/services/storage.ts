@@ -346,6 +346,35 @@ export function exportOrdersToCSV(orders: Order[]): void {
   URL.revokeObjectURL(url);
 }
 
+export const STORAGE_DELETED_PRODUCT_IDS_KEY = 'roza_deleted_product_ids';
+
+export function getDeletedProductIds(): Set<string> {
+  try {
+    if (typeof window === 'undefined') return new Set();
+    const raw = localStorage.getItem(STORAGE_DELETED_PRODUCT_IDS_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) {
+        return new Set(arr.map(String));
+      }
+    }
+  } catch (e) {
+    console.error('Failed to parse deleted product IDs:', e);
+  }
+  return new Set();
+}
+
+export function markProductAsDeleted(productId: string): void {
+  try {
+    if (typeof window === 'undefined') return;
+    const current = getDeletedProductIds();
+    current.add(String(productId));
+    localStorage.setItem(STORAGE_DELETED_PRODUCT_IDS_KEY, JSON.stringify(Array.from(current)));
+  } catch (e) {
+    console.error('Failed to mark product as deleted:', e);
+  }
+}
+
 export function getStoredCatalogProducts(): BeautyProduct[] {
   try {
     if (typeof window !== 'undefined') {
@@ -355,33 +384,65 @@ export function getStoredCatalogProducts(): BeautyProduct[] {
       }
     }
 
+    const deletedIds = getDeletedProductIds();
+
     const raw = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_CATALOG_KEY) : null;
     if (raw !== null) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        return parsed;
+        return parsed.filter((p) => !deletedIds.has(String(p.id)));
       }
     }
+
+    // Return empty list if catalog is empty, do NOT re-seed
+    return [];
   } catch (e) {
     console.error('Failed to load catalog products from storage:', e);
   }
 
-  // Initial products setup on very first boot:
-  const initial = [ROZA_BEAUTY_PRODUCT, ...FASSIL_STORE_PRODUCTS];
-  saveStoredCatalogProducts(initial);
-  return initial;
+  return [];
+}
+
+export function deleteStoredProduct(productId: string): BeautyProduct[] {
+  markProductAsDeleted(productId);
+  const deletedIds = getDeletedProductIds();
+  const current = getStoredCatalogProducts();
+  const nextList = current.filter(
+    (p) => !deletedIds.has(String(p.id)) && String(p.id) !== String(productId)
+  );
+  try {
+    localStorage.setItem(STORAGE_CATALOG_KEY, JSON.stringify(nextList));
+  } catch (e) {
+    console.error('Failed to update catalog after delete:', e);
+  }
+  return nextList;
+}
+
+export function markAllProductsAsDeleted(): void {
+  try {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem('roza_catalog_cleared', 'true');
+    localStorage.setItem(STORAGE_CATALOG_KEY, JSON.stringify([]));
+  } catch (e) {
+    console.error('Failed to mark all products as deleted:', e);
+  }
 }
 
 export function saveStoredCatalogProducts(products: BeautyProduct[]): void {
   try {
-    localStorage.setItem(STORAGE_CATALOG_KEY, JSON.stringify(products));
+    const deletedIds = getDeletedProductIds();
+    const cleanProducts = products.filter((p) => !deletedIds.has(String(p.id)));
+    localStorage.setItem(STORAGE_CATALOG_KEY, JSON.stringify(cleanProducts));
   } catch (e) {
     console.warn('LocalStorage full, trimming image payloads for local cache:', e);
     try {
-      const lightweight = products.map(p => ({
-        ...p,
-        images: p.images.slice(0, 2)
-      }));
+      const deletedIds = getDeletedProductIds();
+      const lightweight = products
+        .filter((p) => !deletedIds.has(String(p.id)))
+        .map((p) => ({
+          ...p,
+          images: p.images.slice(0, 2),
+        }));
       localStorage.setItem(STORAGE_CATALOG_KEY, JSON.stringify(lightweight));
     } catch {
       // Ignore if still too large
