@@ -94,11 +94,14 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
           <img
             src={currentImage}
             alt={`${productTitle} - صورة أصلية ${currentIndex + 1} | متجر ROZA BEAUTY DZ في الجزائر`}
+            width={600}
+            height={750}
             referrerPolicy="no-referrer"
             className={`relative z-10 w-full h-full transition-all duration-500 ${
               aspectMode === 'contain' ? 'object-contain' : 'object-cover'
             }`}
-            loading="lazy"
+            loading="eager"
+            fetchPriority="high"
             decoding="async"
             onError={(e) => {
               (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=1200&q=80';
@@ -187,9 +190,11 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
             <img
               src={img}
               alt={`${productTitle} - زاوية وعرض ${idx + 1} | ألبوم صور متجر ROZA BEAUTY DZ الرسمي`}
+              width={80}
+              height={80}
               referrerPolicy="no-referrer"
               className="w-full h-full object-contain"
-              loading="lazy"
+              loading="eager"
               decoding="async"
             />
           </button>
@@ -223,8 +228,12 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
             <img
               src={currentImage}
               alt={`${productTitle} - عرض مكبر فائق الوضوح | متجر ROZA BEAUTY DZ الرسمي في الجزائر`}
+              width={1000}
+              height={1000}
               referrerPolicy="no-referrer"
               className="max-h-[82vh] max-w-full object-contain rounded-xl shadow-2xl transition-all"
+              loading="eager"
+              decoding="async"
             />
 
             {displayImages.length > 1 && (

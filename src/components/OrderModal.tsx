@@ -178,8 +178,10 @@ export const OrderModal: React.FC<OrderModalProps> = ({
               <img 
                 src={product.images[0]} 
                 alt={product.title} 
+                width={48}
+                height={48}
                 className="w-12 h-12 rounded-xl object-cover border border-[#f7dfe8]" 
-                loading="lazy"
+                loading="eager"
                 decoding="async"
               />
               <div>

@@ -117,6 +117,11 @@ export const HomePage: React.FC<HomePageProps> = ({
               </div>
             )}
           </div>
+        ) : displayedProducts.length === 0 ? (
+          <div className="p-12 text-center bg-white rounded-2xl border border-[#f7dfe8] text-[#8a6b7a]">
+            <p className="font-bold text-base mb-1 text-[#4a2b3d]">كتالوج المنتجات فارغ حالياً</p>
+            <p className="text-xs text-[#8a6b7a]">يمكنك إضافة منتجات جديدة أو استيرادها من لوحة التحكم في أي وقت.</p>
+          </div>
         ) : (
           /* Storefront Category Sections with Mobile Sliders & Desktop Grids */
           categories.map((cat) => {

@@ -456,6 +456,9 @@ export const AdminModal: React.FC<AdminModalProps> = ({
 
       const localIds = new Set(localProductsList.map((p) => p.id));
       const merged = [...localProductsList, ...newlyAdded.filter((p) => !localIds.has(p.id))];
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('roza_catalog_cleared');
+      }
       setLocalProductsList(merged);
       saveStoredCatalogProducts(merged);
       onProductsUpdated?.(merged);
@@ -639,6 +642,9 @@ export const AdminModal: React.FC<AdminModalProps> = ({
 
                 // 2. تفريغ حالة المنتجات في المتجر والذاكرة المحلية
                 const emptyList: BeautyProduct[] = [];
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem('roza_catalog_cleared', 'true');
+                }
                 setLocalProductsList(emptyList);
                 saveStoredCatalogProducts(emptyList);
 
@@ -2730,7 +2736,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                             type="button"
                             onClick={() => {
                               const code = `<!-- كود تضمين كتالوج المنتجات من Roza Beauty DZ -->
-<iframe src="/products-catalog.html" width="100%" height="800" style="border:none;border-radius:16px;" loading="lazy"></iframe>`;
+<iframe src="/products-catalog.html" width="100%" height="800" style="border:none;border-radius:16px;" loading="eager"></iframe>`;
                               navigator.clipboard.writeText(code);
                               setHasCopiedCode(true);
                               setTimeout(() => setHasCopiedCode(false), 3000);
@@ -3707,6 +3713,9 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                                 return [cleanProduct, ...localProductsList];
                               })();
 
+                              if (typeof window !== 'undefined') {
+                                localStorage.removeItem('roza_catalog_cleared');
+                              }
                               setLocalProductsList(nextList);
                               saveStoredCatalogProducts(nextList);
                               if (onProductsUpdated) {
@@ -3938,8 +3947,10 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                                           key={imgIdx}
                                           src={imgUrl}
                                           alt={`${prod.title} - ${imgIdx + 1}`}
+                                          width={40}
+                                          height={40}
                                           className="w-10 h-10 rounded-lg object-cover bg-[#fff8f5] border border-[#f7dfe8] shrink-0 hover:scale-105 transition-transform"
-                                          loading="lazy"
+                                          loading="eager"
                                           decoding="async"
                                         />
                                       ))}
@@ -3951,8 +3962,10 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                                         'https://raw.githubusercontent.com/dahmrisadik60-png/rozaketchendz/main/public/images/bissell-1.webp'
                                       }
                                       alt={prod.title}
+                                      width={48}
+                                      height={48}
                                       className="w-12 h-12 rounded-xl object-cover bg-[#fff8f5] border border-[#f7dfe8] mx-auto shadow-2xs"
-                                      loading="lazy"
+                                      loading="eager"
                                       decoding="async"
                                     />
                                   )}
@@ -4077,8 +4090,10 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                                 'https://raw.githubusercontent.com/dahmrisadik60-png/rozaketchendz/main/public/images/bissell-1.webp'
                               }
                               alt={prod.title}
+                              width={64}
+                              height={64}
                               className="w-16 h-16 rounded-xl object-cover bg-[#fff8f5] border border-[#f7dfe8] shrink-0"
-                              loading="lazy"
+                              loading="eager"
                               decoding="async"
                             />
                             <div className="flex-1 min-w-0">

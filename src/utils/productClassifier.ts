@@ -368,10 +368,10 @@ export function transformToActiveProduct(
   const parsedPrice = parseNumericPrice(item.currentPrice || item.price) || 25000;
   const parsedOldPrice = parseNumericPrice(item.oldPrice);
 
-  // Generate a clean slug ID
+  // Generate a clean slug ID that is strictly ASCII-safe for Firestore
   const cleanSlug = title
     .toLowerCase()
-    .replace(/[^a-z0-9\u0621-\u064A]+/g, '-')
+    .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 50);
 

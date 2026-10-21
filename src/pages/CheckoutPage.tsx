@@ -469,8 +469,10 @@ export const CheckoutPage: React.FC = () => {
                 <img
                   src={product.images[0] || ''}
                   alt={product.title}
+                  width={56}
+                  height={56}
                   className="w-14 h-14 rounded-xl object-cover bg-[#fff8f5] shrink-0 border border-[#f7dfe8]"
-                  loading="lazy"
+                  loading="eager"
                   decoding="async"
                 />
                 <div className="flex-1 min-w-0">

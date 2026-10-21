@@ -638,6 +638,10 @@ export async function deleteCategory(categoryId: string): Promise<void> {
 // -------------------------------------------------------------
 export async function runStorefrontMigration(): Promise<void> {
   try {
+    if (typeof window !== 'undefined' && localStorage.getItem('roza_catalog_cleared') === 'true') {
+      return;
+    }
+
     const productsSnap = await getDocs(collection(db, 'products'));
     if (productsSnap.empty) {
       console.log('Migrating initial products and categories to Firestore...');

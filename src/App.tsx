@@ -124,6 +124,9 @@ export default function App() {
       if (allProds.length > 0) {
         setProductsList(allProds);
         saveStoredCatalogProducts(allProds);
+      } else if (localStorage.getItem('roza_catalog_cleared') === 'true') {
+        setProductsList([]);
+        saveStoredCatalogProducts([]);
       }
     });
 
@@ -201,11 +204,7 @@ export default function App() {
   const activeProduct = product || ROZA_BEAUTY_PRODUCT;
   // The categorized fassil.shop catalog (src/data/fassilProducts.json) ships with the site:
   // products already saved in Firestore win, the rest are added automatically.
-  const currentCatalog = useMemo(() => {
-    const base = productsList.length > 0 ? productsList : [activeProduct];
-    const ids = new Set(base.map((p) => p.id));
-    return [...base, ...FASSIL_STORE_PRODUCTS.filter((p) => !ids.has(p.id))];
-  }, [productsList, activeProduct]);
+  const currentCatalog = productsList;
 
   // Same for categories: make sure every default category exists even if Firestore has an older list
   const currentCategories = useMemo(() => {

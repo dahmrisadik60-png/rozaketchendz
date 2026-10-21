@@ -35,9 +35,11 @@ export const ProductAlbumGallery: React.FC<ProductAlbumGalleryProps> = ({
             key={index} 
             src={imgUrl} 
             alt={`${product.title} - صورة ألبوم ${index + 1} | متجر ROZA BEAUTY DZ الجزائر`} 
+            width={typeof thumbnailSize === 'number' ? thumbnailSize : 80}
+            height={typeof thumbnailSize === 'number' ? thumbnailSize : 80}
             className="gallery-thumbnail hover:scale-105 transition-transform cursor-pointer shrink-0"
             style={{ width: sizeStyle, height: sizeStyle, objectFit: 'cover', borderRadius: '4px' }}
-            loading="lazy"
+            loading="eager"
             decoding="async"
             onClick={() => onSelectImage?.(imgUrl, index)}
           />
@@ -50,7 +52,9 @@ export const ProductAlbumGallery: React.FC<ProductAlbumGalleryProps> = ({
     <img 
       src={product.image || ''} 
       alt={`${product.title} - الصورة الرسمية | متجر ROZA BEAUTY DZ الجزائر`} 
-      loading="lazy" 
+      width={typeof thumbnailSize === 'number' ? thumbnailSize : 80}
+      height={typeof thumbnailSize === 'number' ? thumbnailSize : 80}
+      loading="eager" 
       decoding="async"
       style={{ width: sizeStyle, height: sizeStyle, objectFit: 'cover', borderRadius: '4px' }}
       className={`gallery-thumbnail ${className}`}

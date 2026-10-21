@@ -37,30 +37,11 @@ export const CategoryProductSection: React.FC<CategoryProductSectionProps> = Rea
     }
   };
 
-  // Track active slide index on horizontal scroll
-  const handleScroll = () => {
-    if (!scrollRef.current || products.length === 0) return;
-    const el = scrollRef.current;
-    const scrollLeft = Math.abs(el.scrollLeft);
-    const scrollWidth = el.scrollWidth - el.clientWidth;
-    
-    if (scrollWidth <= 0) {
-      setActiveIndex(0);
-      return;
-    }
-
-    // Determine current index based on scroll progress
-    const itemWidth = el.scrollWidth / products.length;
-    const rawIndex = Math.round(scrollLeft / itemWidth);
-    const clamped = Math.max(0, Math.min(rawIndex, products.length - 1));
-    setActiveIndex(clamped);
-  };
-
   const scrollToItem = (idx: number) => {
     if (!scrollRef.current) return;
     const el = scrollRef.current;
     const itemWidth = el.scrollWidth / products.length;
-    // Scroll in RTL
+    // Scroll in RTL smoothly
     el.scrollTo({
       left: -(idx * itemWidth),
       behavior: 'smooth'
@@ -98,7 +79,6 @@ export const CategoryProductSection: React.FC<CategoryProductSectionProps> = Rea
       <div className="md:hidden flex flex-col">
         <div
           ref={scrollRef}
-          onScroll={handleScroll}
           className="flex overflow-x-auto snap-x snap-mandatory gap-3 no-scrollbar pb-2 pt-1 -mx-3.5 px-3.5"
         >
           {products.map((product) => (

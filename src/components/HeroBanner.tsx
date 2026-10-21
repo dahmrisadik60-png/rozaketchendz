@@ -91,6 +91,8 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ banner, onCtaClick }) =>
                   <img
                     src={heroImg}
                     alt={banner.title}
+                    width={320}
+                    height={320}
                     className="w-full h-full object-cover"
                     loading="eager"
                     fetchPriority="high"

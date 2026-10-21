@@ -29,7 +29,7 @@ export const ProductSeo: React.FC<ProductSeoProps> = ({ product }) => {
       return `${SITE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
     };
     const mainImage = toAbsoluteUrl(mainImageRaw);
-    const formattedPrice = product.price.toLocaleString();
+    const formattedPrice = (product.price || 0).toLocaleString();
     
     // 1. Dynamic Page Title (Optimized for Google SERP: 50-60 chars)
     document.title = `${product.title} - ${formattedPrice} د.ج | ${STORE_NAME}`;

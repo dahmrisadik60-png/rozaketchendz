@@ -158,7 +158,7 @@
           <div class="product-card">
             <div class="card-badge">${item.category}</div>
             <div class="card-image-wrap">
-              <img src="${mainImg}" alt="${item.title}" class="main-card-img" loading="lazy" decoding="async" />
+              <img src="${mainImg}" alt="${item.title}" class="main-card-img" width="300" height="300" loading="eager" decoding="async" />
             </div>
             ${hasGallery ? `
               <div class="product-gallery" style="display: flex; gap: 8px; overflow-x: auto; background: #fff8f5; border-bottom: 1px solid var(--border);">
@@ -168,15 +168,17 @@
                     src="${imgUrl}" 
                     alt="${item.title} - ${index + 1}" 
                     class="gallery-thumbnail"
+                    width="50"
+                    height="50"
                     style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px;"
-                    loading="lazy"
+                    loading="eager"
                     decoding="async"
                     onclick="this.closest('.product-card').querySelector('.main-card-img').src = '${imgUrl}';"
                   />
                 `).join('')}
               </div>
             ` : `
-              <img src="${item.image}" alt="${item.title}" loading="lazy" decoding="async" style="width: 80px; height: 80px; object-fit: cover; border-radius: 4px;" />
+              <img src="${item.image}" alt="${item.title}" width="80" height="80" loading="eager" decoding="async" style="width: 80px; height: 80px; object-fit: cover; border-radius: 4px;" />
             `}
             <div class="card-content">
               <div>
@@ -210,14 +212,16 @@
                       src="${imgUrl}" 
                       alt="${item.title} - ${index + 1}" 
                       class="gallery-thumbnail"
+                      width="50"
+                      height="50"
                       style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px;"
-                      loading="lazy"
+                      loading="eager"
                       decoding="async"
                     />
                   `).join('')}
                 </div>
               ` : `
-                <img src="${item.image}" alt="${item.title}" class="table-thumb" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px;" loading="lazy" decoding="async" />
+                <img src="${item.image}" alt="${item.title}" class="table-thumb" width="50" height="50" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px;" loading="eager" decoding="async" />
               `}
             </td>
             <td><strong>${item.title}</strong></td>

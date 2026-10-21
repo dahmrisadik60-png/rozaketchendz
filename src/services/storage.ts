@@ -1,5 +1,6 @@
 import { Order, BeautyProduct, OrderStatus, CustomerReview, ProductCategory } from '../types';
 import { ROZA_BEAUTY_PRODUCT, INITIAL_STORE_PRODUCTS } from '../data/products';
+import { FASSIL_STORE_PRODUCTS } from '../data/fassilCatalog';
 import { DEFAULT_CATEGORIES } from '../data/categories';
 import { ALGERIAN_CUSTOMER_REVIEWS } from '../data/reviews';
 
@@ -347,48 +348,28 @@ export function exportOrdersToCSV(orders: Order[]): void {
 
 export function getStoredCatalogProducts(): BeautyProduct[] {
   try {
-    const raw = localStorage.getItem(STORAGE_CATALOG_KEY);
-    if (raw) {
+    if (typeof window !== 'undefined') {
+      const isCleared = localStorage.getItem('roza_catalog_cleared');
+      if (isCleared === 'true') {
+        return [];
+      }
+    }
+
+    const raw = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_CATALOG_KEY) : null;
+    if (raw !== null) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        // Map of standard initial products
-        const initialMap = new Map(INITIAL_STORE_PRODUCTS.map((p) => [p.id, p]));
-        const existingIds = new Set(parsed.map((p) => p.id));
-        let changed = false;
-
-        // Update any existing initial product with latest specs/images/category
-        const merged = parsed.map((p) => {
-          const fresh = initialMap.get(p.id);
-          if (fresh) {
-            return {
-              ...fresh,
-              isVisible: p.isVisible ?? fresh.isVisible,
-              isFeatured: p.isFeatured ?? fresh.isFeatured,
-              stockCount: p.stockCount ?? fresh.stockCount,
-            };
-          }
-          return p;
-        });
-
-        // Add any newly introduced products
-        for (const item of INITIAL_STORE_PRODUCTS) {
-          if (!existingIds.has(item.id)) {
-            merged.push(item);
-            changed = true;
-          }
-        }
-
-        if (changed || merged.length !== parsed.length) {
-          saveStoredCatalogProducts(merged);
-        }
-        return merged;
+      if (Array.isArray(parsed)) {
+        return parsed;
       }
     }
   } catch (e) {
     console.error('Failed to load catalog products from storage:', e);
   }
-  saveStoredCatalogProducts(INITIAL_STORE_PRODUCTS);
-  return INITIAL_STORE_PRODUCTS;
+
+  // Initial products setup on very first boot:
+  const initial = [ROZA_BEAUTY_PRODUCT, ...FASSIL_STORE_PRODUCTS];
+  saveStoredCatalogProducts(initial);
+  return initial;
 }
 
 export function saveStoredCatalogProducts(products: BeautyProduct[]): void {

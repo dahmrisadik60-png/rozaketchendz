@@ -30,7 +30,7 @@ export const ProductPage: React.FC<ProductPageProps> = ({
 
   // Find target product by id and enrich with full images array from fassil_products_album.json
   const product = useMemo(() => {
-    const rawProd = products.find((p) => p.id === id) || products[0];
+    const rawProd = id ? products.find((p) => p.id === id) : products[0];
     if (!rawProd) return null;
 
     // Look for matching product in album JSON by title or URL or id
@@ -90,9 +90,9 @@ export const ProductPage: React.FC<ProductPageProps> = ({
   if (!product) {
     return (
       <div className="min-h-[50vh] flex flex-col items-center justify-center text-center p-6">
-        <p className="text-[#8a6b7a] font-bold mb-4">جاري تحميل بيانات المنتج...</p>
-        <Link to="/" className="text-[#d94f86] font-bold hover:underline">
-          العودة للرئيسية
+        <p className="text-[#8a6b7a] font-bold mb-4">المنتج المطلوب غير موجود أو لم يعد متوفراً</p>
+        <Link to="/" className="px-4 py-2 rounded-xl bg-[#d94f86] text-white font-bold text-xs hover:bg-[#c93d78] transition-colors shadow-xs">
+          العودة للمتجر الرئيسي
         </Link>
       </div>
     );

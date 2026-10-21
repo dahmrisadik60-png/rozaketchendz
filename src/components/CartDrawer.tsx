@@ -71,8 +71,10 @@ export const CartDrawer: React.FC = () => {
                 <img
                   src={product.images[0] || ''}
                   alt={product.title}
+                  width={72}
+                  height={72}
                   className="w-18 h-18 rounded-xl object-cover bg-[#fff8f5] border border-[#f7dfe8] shrink-0"
-                  loading="lazy"
+                  loading="eager"
                   decoding="async"
                 />
 

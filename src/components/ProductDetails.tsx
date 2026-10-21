@@ -69,8 +69,10 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({
             <img 
               src={selectedImage} 
               alt={`${product.title} - صورة المنتج الأصلية | متجر ROZA BEAUTY DZ في الجزائر`} 
+              width={400}
+              height={400}
               className="w-full max-h-[400px] object-contain rounded-xl mx-auto transition-all duration-300"
-              loading="lazy"
+              loading="eager"
               decoding="async"
             />
           </div>
@@ -83,13 +85,15 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({
                   key={idx}
                   src={imgUrl}
                   alt={`${product.title} - صورة ألبوم ${idx + 1} | أجهزة متجر ROZA BEAUTY DZ`}
+                  width={80}
+                  height={80}
                   onClick={() => setSelectedImage(imgUrl)}
                   className={`w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-xl cursor-pointer transition-all duration-200 shrink-0 ${
                     selectedImage === imgUrl 
                       ? 'border-2 border-[#d94f86] ring-2 ring-[#d94f86]/30 scale-105 shadow-xs' 
                       : 'border border-[#f7dfe8] opacity-80 hover:opacity-100 hover:border-[#d94f86]'
                   }`}
-                  loading="lazy"
+                  loading="eager"
                   decoding="async"
                 />
               ))}
